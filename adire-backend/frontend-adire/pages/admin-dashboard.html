@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eury Textiles - Admin</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="../css/index.css">
+    <style>
+        :root {
+            --bg-cream: #FFF8F0;
+            --card-cream: #F5E9DC;
+            --primary-red: #A52A2A;
+            --accent-gold: #C4A047;
+            --text-burgundy: #3C2F2F;
+            --glass-bg: rgba(255, 255, 255, 0.45);
+            --glass-border: rgba(255, 255, 255, 0.5);
+            --shadow: 0 8px 32px 0 rgba(165, 42, 42, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-cream);
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23A52A2A' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            color: var(--text-burgundy);
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        /* Glassmorphism */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+        }
+
+        /* Typography */
+        h1,
+        h2,
+        h3,
+        h4 {
+            font-family: 'Playfair Display', serif;
+            color: var(--text-burgundy);
+        }
+
+        h1 {
+            font-weight: 700;
+        }
+
+        .brand-text {
+            font-style: italic;
+            color: var(--accent-gold);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            background: linear-gradient(180deg, #A52A2A 0%, #3C2F2F 100%);
+            color: var(--bg-cream);
+            padding: 30px 0;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 5px 0 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar-logo {
+            padding: 0 30px 40px;
+            font-size: 28px;
+            font-family: 'Playfair Display', serif;
+            font-weight: 700;
+            font-style: italic;
+            color: var(--accent-gold);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .nav-item {
+            padding: 15px 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+        }
+
+        .nav-item:hover,
+        .nav-item.active {
+            background: rgba(196, 160, 71, 0.15);
+            color: #fff;
+            border-left: 4px solid var(--accent-gold);
+        }
+
+        .nav-item i {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            padding: 40px;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .top-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+        }
+
+        .welcome-text h1 {
+            font-size: 32px;
+            margin-bottom: 5px;
+        }
+
+        .welcome-text p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .search-bar {
+            background: white;
+            border-radius: 50px;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            border: 1px solid #ddd;
+            width: 300px;
+        }
+
+        .search-bar input {
+            border: none;
+            outline: none;
+            margin-left: 10px;
+            width: 100%;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--accent-gold);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s;
+            border-top: 4px solid var(--primary-red);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .stat-value {
+            font-family: 'Playfair Display', serif;
+            font-size: 36px;
+            color: var(--accent-gold);
+            font-weight: 700;
+        }
+
+        /* Tables */
+        .content-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            padding: 0;
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+
+        .card-header {
+            padding: 25px 30px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-header h3 {
+            margin: 0;
+            font-size: 20px;
+            color: var(--primary-red);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 18px 30px;
+            text-align: left;
+            border-bottom: 1px solid #f9f9f9;
+        }
+
+        th {
+            background: #FAF5F0;
+            font-weight: 600;
+            color: var(--text-burgundy);
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+
+        td {
+            color: #555;
+        }
+
+        tr:hover {
+            background: #FFFBF5;
+        }
+
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-pending {
+            background: #FFF4E5;
+            color: #FF9800;
+        }
+
+        .status-completed,
+        .status-active {
+            background: #E8F5E9;
+            color: #4CAF50;
+        }
+
+        .status-cancelled,
+        .status-out {
+            background: #FFEBEE;
+            color: #F44336;
+        }
+
+        /* Buttons */
+        .btn {
+            background: var(--primary-red);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(165, 42, 42, 0.3);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--primary-red);
+            color: var(--primary-red);
+        }
+
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+
+        /* Forms */
+        .form-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            z-index: 2000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .form-modal {
+            background: white;
+            width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent-gold);
+        }
+
+        /* Image Upload */
+        .upload-area {
+            border: 2px dashed #ddd;
+            padding: 40px;
+            text-align: center;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary-red);
+            background: #FFFBF5;
+        }
+
+        /* Sections */
+        .section-view {
+            display: none;
+        }
+
+        .section-view.active {
+            display: block;
+            animation: fadeIn 0.4s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-logo">Eury Textiles</div>
+        <div class="sidebar-menu">
+            <div class="nav-item active" onclick="switchTab('dashboard', this)"><span>📊</span> Dashboard</div>
+            <div class="nav-item" onclick="switchTab('products', this)"><span>📦</span> Products</div>
+            <div class="nav-item" onclick="switchTab('orders', this)"><span>🛍️</span> Orders</div>
+            <div class="nav-item" onclick="switchTab('customers', this)"><span>👥</span> Customers</div>
+            <div class="nav-item" onclick="switchTab('quotes', this)"><span>📋</span> Quotes</div>
+            <div class="nav-item" onclick="switchTab('coupons', this)"><span>🎟️</span> Coupons</div>
+            <div class="nav-item" onclick="switchTab('reports', this)"><span>📈</span> Reports</div>
+            <div class="nav-item" onclick="switchTab('delivery', this)"><span>🚚</span> Delivery</div>
+            <div class="nav-item" onclick="switchTab('reviews', this)"><span>⭐</span> Reviews</div>
+            <div class="nav-item" onclick="switchTab('staff', this)"><span>👔</span> Staff</div>
+            <div class="nav-item" onclick="switchTab('settings', this)"><span>⚙️</span> Settings</div>
+            <div class="nav-item" onclick="logout()" style="margin-top: 40px; color: #ff9999;"><span>🚪</span> Logout
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+
+        <!-- Header -->
+        <div class="top-header">
+            <div class="welcome-text">
+                <h1>Welcome Back, Admin</h1>
+                <p>Here's what's happening with your store today.</p>
+            </div>
+            <div class="header-actions">
+                <div class="search-bar">
+                    <span>🔍</span>
+                    <input type="text" placeholder="Search orders, products...">
+                </div>
+                <div class="user-profile">
+                    <div class="avatar">A</div>
+                    <span style="font-weight: 500;">Mercy Akinyemi</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- DASHBOARD SECTION -->
+        <div id="dashboard-view" class="section-view active">
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Revenue</div>
+                    <div class="stat-value">₦<span id="stat-revenue">0</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Orders</div>
+                    <div class="stat-value" id="stat-orders">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Pending Orders</div>
+                    <div class="stat-value" id="stat-pending">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Products</div>
+                    <div class="stat-value" id="stat-products">0</div>
+                </div>
+            </div>
+
+            <div class="content-card">
+                <div class="card-header">
+                    <h3>Recent Orders</h3>
+                    <button class="btn btn-sm btn-outline" onclick="switchTab('orders')">View All</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Customer</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recent-orders-body">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PRODUCTS SECTION -->
+        <div id="products-view" class="section-view">
+            <div class="top-header">
+                <div>
+                    <h2>Products Management</h2>
+                    <p>Manage your inventory and catalog.</p>
+                </div>
+                <button class="btn" onclick="openModal('product-modal')">+ Add New Product</button>
+            </div>
+
+            <div class="content-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Image</th>
+                            <th>Name</th>
+                            <th>Category</th>
+                            <th>Price</th>
+                            <th>Stock</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="products-body">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ORDERS SECTION -->
+        <div id="orders-view" class="section-view">
+            <div class="top-header">
+                <h2>Orders Management</h2>
+            </div>
+            <div class="content-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Customer</th>
+                            <th>Items</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orders-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- COUPONS SECTION -->
+        <div id="coupons-view" class="section-view">
+            <div class="top-header">
+                <h2>Coupons & Discounts</h2>
+                <button class="btn" onclick="openModal('coupon-modal')">+ Create Coupon</button>
+            </div>
+            <div class="content-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Discount</th>
+                            <th>Expiry</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="coupons-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- REVIEWS SECTION -->
+        <div id="reviews-view" class="section-view">
+            <div class="top-header">
+                <h2>Customer Reviews</h2>
+            </div>
+            <div class="content-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>User</th>
+                            <th>Rating</th>
+                            <th>Comment</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reviews-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- OTHER SECTIONS (Placeholders for visual completeness) -->
+        <div id="customers-view" class="section-view">
+            <div class="empty-state" style="text-align: center; padding: 100px;">
+                <h2>👥 Customers Management Coming Soon</h2>
+            </div>
+        </div>
+        <div id="quotes-view" class="section-view">
+            <div class="empty-state" style="text-align: center; padding: 100px;">
+                <h2>📋 Quote Requests Coming Soon</h2>
+            </div>
+        </div>
+        <div id="reports-view" class="section-view">
+            <div class="empty-state" style="text-align: center; padding: 100px;">
+                <h2>📈 Detailed Analytics Coming Soon</h2>
+            </div>
+        </div>
+        <div id="delivery-view" class="section-view">
+            <div class="empty-state" style="text-align: center; padding: 100px;">
+                <h2>🚚 Delivery Settings Coming Soon</h2>
+            </div>
+        </div>
+        <div id="staff-view" class="section-view">
+            <div class="empty-state" style="text-align: center; padding: 100px;">
+                <h2>👔 Staff Management Coming Soon</h2>
+            </div>
+        </div>
+        <div id="settings-view" class="section-view">
+            <div class="empty-state" style="text-align: center; padding: 100px;">
+                <h2>⚙️ Settings Coming Soon</h2>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MODALS -->
+
+    <!-- Add Product Modal -->
+    <div id="product-modal" class="form-overlay">
+        <div class="form-modal">
+            <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+                <h2>Add Product</h2>
+                <button onclick="closeModal('product-modal')"
+                    style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
+            </div>
+            <form id="product-form">
+                <div class="form-group">
+                    <label>Product Name</label>
+                    <input type="text" id="p-name" class="form-control" required>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="p-category" class="form-control">
+                            <option>Premium Adire</option>
+                            <option>Silk</option>
+                            <option>Cotton</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Price (₦)</label>
+                        <input type="number" id="p-price" class="form-control" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="p-desc" class="form-control" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Images</label>
+                    <div class="upload-area" onclick="document.getElementById('p-image').click()">
+                        <p>Click to upload image</p>
+                        <input type="file" id="p-image" hidden onchange="previewImage(this)">
+                        <img id="img-preview" style="max-height:100px; display:none; margin:10px auto;">
+                    </div>
+                </div>
+                <button type="submit" class="btn" style="width:100%">Publish Product</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Coupon Modal -->
+    <div id="coupon-modal" class="form-overlay">
+        <div class="form-modal">
+            <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+                <h2>Create Coupon</h2>
+                <button onclick="closeModal('coupon-modal')"
+                    style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
+            </div>
+            <form id="coupon-form">
+                <div class="form-group">
+                    <label>Code</label>
+                    <input type="text" id="c-code" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Discount (%)</label>
+                    <input type="number" id="c-discount" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Expiry</label>
+                    <input type="date" id="c-expiry" class="form-control" required>
+                </div>
+                <button type="submit" class="btn" style="width:100%">Create Coupon</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        const adminToken = localStorage.getItem('admin_token');
+        if (!adminToken) window.location.href = 'login.html';
+
+        let base64Image = '';
+
+        // Navigation
+        function switchTab(tabId, element) {
+            document.querySelectorAll('.section-view').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId + '-view').classList.add('active');
+
+            if (element) {
+                document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+                element.classList.add('active');
+            }
+
+            // Data loading
+            if (tabId === 'dashboard') loadDashboard();
+            if (tabId === 'products') fetchProducts();
+            if (tabId === 'orders') fetchOrders();
+            if (tabId === 'coupons') fetchCoupons();
+            if (tabId === 'reviews') fetchReviews();
+        }
+
+        // Modals
+        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        // Core Data Functions
+        async function loadDashboard() {
+            try {
+                const products = await api.get('/products');
+                const orders = await api.get('/admin/orders', { 'Authorization': `Bearer ${adminToken}` });
+
+                document.getElementById('stat-products').innerText = products.length;
+                document.getElementById('stat-orders').innerText = orders.length;
+                document.getElementById('stat-pending').innerText = orders.filter(o => o.status === 'Pending').length;
+
+                const revenue = orders.reduce((sum, o) => sum + o.total, 0);
+                document.getElementById('stat-revenue').innerText = revenue.toLocaleString();
+
+                // Recent orders
+                const recent = orders.slice(0, 5);
+                document.getElementById('recent-orders-body').innerHTML = recent.map(o => `
+                    <tr>
+                        <td>#${o.id}</td>
+                        <td>${o.user_email}</td>
+                        <td>₦${o.total.toLocaleString()}</td>
+                        <td><span class="status-badge status-${o.status.toLowerCase()}">${o.status}</span></td>
+                        <td>${new Date(o.created_at).toLocaleDateString()}</td>
+                        <td><button class="btn btn-sm btn-outline">View</button></td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function fetchProducts() {
+            const products = await api.get('/products');
+            document.getElementById('products-body').innerHTML = products.map(p => `
+                <tr>
+                    <td><img src="${p.image_base64}" style="width:50px; height:50px; object-fit:cover; border-radius:8px;"></td>
+                    <td><strong>${p.name}</strong></td>
+                    <td>${p.category}</td>
+                    <td>₦${p.price.toLocaleString()}</td>
+                    <td>${p.stock}</td>
+                    <td><button class="btn btn-sm btn-outline">Edit</button></td>
+                </tr>
+            `).join('');
+        }
+
+        async function fetchOrders() {
+            const orders = await api.get('/admin/orders', { 'Authorization': `Bearer ${adminToken}` });
+            document.getElementById('orders-body').innerHTML = orders.map(o => `
+                <tr>
+                    <td>#${o.id}</td>
+                    <td>${o.user_email}</td>
+                    <td>${JSON.parse(o.items).length} items</td>
+                    <td>₦${o.total.toLocaleString()}</td>
+                    <td><span class="status-badge status-${o.status.toLowerCase()}">${o.status}</span></td>
+                    <td>${new Date(o.created_at).toLocaleDateString()}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function fetchCoupons() {
+            const coupons = await api.get('/admin/coupons', { 'Authorization': `Bearer ${adminToken}` });
+            document.getElementById('coupons-body').innerHTML = coupons.map(c => `
+                <tr>
+                    <td><strong>${c.code}</strong></td>
+                    <td>${c.discount}%</td>
+                    <td>${c.expiry_date}</td>
+                    <td><span class="status-badge status-active">Active</span></td>
+                    <td><button class="btn btn-sm btn-outline" onclick="deleteCoupon(${c.id})">Delete</button></td>
+                </tr>
+            `).join('');
+        }
+
+        async function fetchReviews() {
+            const reviews = await api.get('/admin/reviews', { 'Authorization': `Bearer ${adminToken}` });
+            document.getElementById('reviews-body').innerHTML = reviews.map(r => `
+                <tr>
+                    <td>${r.product_name}</td>
+                    <td>${r.user_name}</td>
+                    <td>${'⭐'.repeat(r.rating)}</td>
+                    <td>${r.comment}</td>
+                    <td><span class="status-badge status-${r.status === 'Approved' ? 'active' : 'pending'}">${r.status}</span></td>
+                    <td>
+                         ${r.status === 'Pending' ? `<button class="btn btn-sm" onclick="approveReview(${r.id})">Approve</button>` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Actions
+        function previewImage(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                base64Image = e.target.result;
+                document.getElementById('img-preview').src = base64Image;
+                document.getElementById('img-preview').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        document.getElementById('product-form').addEventListener('submit', async e => {
+            e.preventDefault();
+            const data = {
+                name: document.getElementById('p-name').value,
+                category: document.getElementById('p-category').value,
+                price: parseInt(document.getElementById('p-price').value),
+                stock: 10,
+                description: document.getElementById('p-desc').value,
+                image_base64: base64Image
+            };
+            await api.post('/admin/products', data, { 'Authorization': `Bearer ${adminToken}` });
+            alert('Product Published!');
+            closeModal('product-modal');
+            fetchProducts();
+        });
+
+        document.getElementById('coupon-form').addEventListener('submit', async e => {
+            e.preventDefault();
+            const data = {
+                code: document.getElementById('c-code').value,
+                discount: document.getElementById('c-discount').value,
+                expiry: document.getElementById('c-expiry').value
+            };
+            await api.post('/admin/coupons', data, { 'Authorization': `Bearer ${adminToken}` });
+            alert('Coupon Created!');
+            closeModal('coupon-modal');
+            fetchCoupons();
+        });
+
+        async function deleteCoupon(id) {
+            if (confirm('Delete?')) {
+                await fetch('http://localhost:5000/admin/coupons/' + id, { method: 'DELETE', headers: { 'Authorization': `Bearer ${adminToken}` } });
+                fetchCoupons();
+            }
+        }
+
+        async function approveReview(id) {
+            await fetch('http://localhost:5000/admin/reviews/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` }, body: JSON.stringify({ status: 'Approved' }) });
+            fetchReviews();
+        }
+
+        function logout() {
+            localStorage.removeItem('admin_token');
+            window.location.href = 'login.html';
+        }
+
+        // Init
+        loadDashboard();
+
+    </script>
+</body>
+
+</html>

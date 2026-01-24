@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Map Tracking - Eury Textiles</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #FFF8F0 0%, #FAEBD7 100%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 36px;
+            color: #8B0000;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 16px;
+        }
+
+        .map-container {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+            height: calc(100vh - 200px);
+        }
+
+        .orders-sidebar {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 10px 40px rgba(139, 0, 0, 0.1);
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #8B0000;
+        }
+
+        .sidebar-header h2 {
+            color: #8B0000;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .order-item {
+            background: #FFF8F0;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .order-item:hover {
+            transform: translateX(5px);
+            border-color: #8B0000;
+            box-shadow: 0 4px 15px rgba(139, 0, 0, 0.2);
+        }
+
+        .order-item.active {
+            background: linear-gradient(135deg, #8B0000 0%, #A52A2A 100%);
+            color: white;
+        }
+
+        .order-id {
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+
+        .order-status {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            display: inline-block;
+            margin-top: 8px;
+        }
+
+        .status-pending {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+
+        .status-shipped {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status-delivered {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .order-item.active .order-status {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+
+        #map {
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(139, 0, 0, 0.1);
+            height: 100%;
+        }
+
+        .route-info {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(139, 0, 0, 0.2);
+            z-index: 1000;
+            max-width: 300px;
+            display: none;
+        }
+
+        .route-info.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .route-info h3 {
+            color: #8B0000;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .route-detail {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #E0E0E0;
+        }
+
+        .route-detail:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .detail-value {
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #8B0000;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .back-link:hover {
+            transform: translateX(-5px);
+        }
+
+        .legend {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .legend-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+        }
+
+        .icon-warehouse {
+            background: #8B0000;
+        }
+
+        .icon-delivery {
+            background: #1976d2;
+        }
+
+        .icon-customer {
+            background: #2e7d32;
+        }
+
+        @media (max-width: 768px) {
+            .map-container {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+
+            .orders-sidebar {
+                height: 300px;
+            }
+
+            #map {
+                height: 500px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <a href="user-dashboard.html" class="back-link">← Back to Dashboard</a>
+
+        <div class="header">
+            <h1>🗺️ Live Order Tracking Map</h1>
+            <p>Track your deliveries in real-time with route directions</p>
+        </div>
+
+        <div class="map-container">
+            <div class="orders-sidebar">
+                <div class="sidebar-header">
+                    <h2>Active Deliveries</h2>
+                </div>
+                <div id="orders-list">
+                    <p style="color: #666; text-align: center; padding: 40px 20px;">Loading orders...</p>
+                </div>
+
+                <div class="legend">
+                    <h4 style="color: #8B0000; margin-bottom: 15px;">Map Legend</h4>
+                    <div class="legend-item">
+                        <div class="legend-icon icon-warehouse"></div>
+                        <span>Warehouse / Origin</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-icon icon-delivery"></div>
+                        <span>Delivery in Progress</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-icon icon-customer"></div>
+                        <span>Customer Location</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="position: relative;">
+                <div id="map"></div>
+                <div id="route-info" class="route-info">
+                    <h3>Delivery Details</h3>
+                    <div class="route-detail">
+                        <span class="detail-label">Order ID:</span>
+                        <span class="detail-value" id="info-order-id">-</span>
+                    </div>
+                    <div class="route-detail">
+                        <span class="detail-label">Distance:</span>
+                        <span class="detail-value" id="info-distance">-</span>
+                    </div>
+                    <div class="route-detail">
+                        <span class="detail-label">Est. Time:</span>
+                        <span class="detail-value" id="info-time">-</span>
+                    </div>
+                    <div class="route-detail">
+                        <span class="detail-label">Status:</span>
+                        <span class="detail-value" id="info-status">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/auth.js"></script>
+    <script>
+        let map;
+        let routingControl;
+        let markers = [];
+        let allOrders = [];
+
+        // Initialize map centered on Lagos, Nigeria
+        function initMap() {
+            map = L.map('map').setView([6.5244, 3.3792], 12);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            // Add warehouse marker (Eury Textiles HQ)
+            const warehouseIcon = L.divIcon({
+                className: 'custom-marker',
+                html: '<div style="background: #8B0000; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.3);"></div>',
+                iconSize: [30, 30]
+            });
+
+            L.marker([6.5244, 3.3792], { icon: warehouseIcon })
+                .addTo(map)
+                .bindPopup('<b>Eury Textiles Warehouse</b><br>Lagos, Nigeria');
+        }
+
+        async function loadOrders() {
+            const user = auth.getUser();
+            if (!user) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            try {
+                allOrders = await api.get(`/orders/${user.email}`);
+                displayOrders();
+            } catch (err) {
+                console.error('Error loading orders:', err);
+                // Use mock data for demonstration
+                allOrders = [
+                    {
+                        id: 1,
+                        status: 'Shipped',
+                        items: JSON.stringify([{ name: 'Classic Indigo Adire', quantity: 1 }]),
+                        total: 15000,
+                        address: 'Victoria Island, Lagos',
+                        lat: 6.4281,
+                        lng: 3.4219
+                    },
+                    {
+                        id: 2,
+                        status: 'Shipped',
+                        items: JSON.stringify([{ name: 'Traditional Adire Geometric', quantity: 2 }]),
+                        total: 50000,
+                        address: 'Ikeja, Lagos',
+                        lat: 6.6018,
+                        lng: 3.3515
+                    },
+                    {
+                        id: 3,
+                        status: 'Pending',
+                        items: JSON.stringify([{ name: 'Luxury Adire Silk', quantity: 1 }]),
+                        total: 45000,
+                        address: 'Lekki, Lagos',
+                        lat: 6.4698,
+                        lng: 3.5852
+                    }
+                ];
+                displayOrders();
+            }
+        }
+
+        function displayOrders() {
+            const container = document.getElementById('orders-list');
+
+            if (allOrders.length === 0) {
+                container.innerHTML = '<p style="color: #666; text-align: center; padding: 40px 20px;">No active deliveries</p>';
+                return;
+            }
+
+            container.innerHTML = allOrders.map(order => {
+                const items = JSON.parse(order.items);
+                const statusClass = order.status === 'Delivered' ? 'status-delivered' :
+                    order.status === 'Shipped' ? 'status-shipped' : 'status-pending';
+
+                return `
+                    <div class="order-item" onclick="showOrderRoute(${order.id})">
+                        <div class="order-id">Order #${order.id}</div>
+                        <div style="font-size: 13px; color: #666; margin: 5px 0;">
+                            ${items.map(i => i.name).join(', ')}
+                        </div>
+                        <div style="font-size: 14px; font-weight: 600; color: #8B0000; margin: 5px 0;">
+                            ₦${order.total.toLocaleString()}
+                        </div>
+                        <div style="font-size: 12px; color: #666;">
+                            📍 ${order.address || 'Address not provided'}
+                        </div>
+                        <span class="order-status ${statusClass}">${order.status}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showOrderRoute(orderId) {
+            const order = allOrders.find(o => o.id === orderId);
+            if (!order) return;
+
+            // Remove active class from all items
+            document.querySelectorAll('.order-item').forEach(item => {
+                item.classList.remove('active');
+            });
+
+            // Add active class to clicked item
+            event.currentTarget.classList.add('active');
+
+            // Clear existing route and markers
+            if (routingControl) {
+                map.removeControl(routingControl);
+            }
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+
+            // Warehouse location (origin)
+            const warehouse = L.latLng(6.5244, 3.3792);
+
+            // Customer location (destination)
+            const customerLat = order.lat || (6.5244 + (Math.random() - 0.5) * 0.2);
+            const customerLng = order.lng || (3.3792 + (Math.random() - 0.5) * 0.2);
+            const customer = L.latLng(customerLat, customerLng);
+
+            // Add customer marker
+            const customerIcon = L.divIcon({
+                className: 'custom-marker',
+                html: '<div style="background: #2e7d32; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.3);"></div>',
+                iconSize: [30, 30]
+            });
+
+            const customerMarker = L.marker(customer, { icon: customerIcon })
+                .addTo(map)
+                .bindPopup(`<b>Order #${order.id}</b><br>${order.address}`);
+            markers.push(customerMarker);
+
+            // Create route
+            routingControl = L.Routing.control({
+                waypoints: [warehouse, customer],
+                routeWhileDragging: false,
+                addWaypoints: false,
+                lineOptions: {
+                    styles: [{ color: '#8B0000', opacity: 0.8, weight: 6 }]
+                },
+                createMarker: function () { return null; }, // Don't create default markers
+                show: false // Hide the routing instructions panel
+            }).addTo(map);
+
+            // Show route info
+            const routeInfo = document.getElementById('route-info');
+            routeInfo.classList.add('show');
+            document.getElementById('info-order-id').textContent = `#${order.id}`;
+            document.getElementById('info-status').textContent = order.status;
+
+            // Calculate approximate distance and time
+            routingControl.on('routesfound', function (e) {
+                const route = e.routes[0];
+                const distance = (route.summary.totalDistance / 1000).toFixed(1);
+                const time = Math.round(route.summary.totalTime / 60);
+
+                document.getElementById('info-distance').textContent = `${distance} km`;
+                document.getElementById('info-time').textContent = `${time} mins`;
+            });
+
+            // Fit map to show route
+            map.fitBounds([warehouse, customer], { padding: [50, 50] });
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            loadOrders();
+        });
+    </script>
+</body>
+
+</html>

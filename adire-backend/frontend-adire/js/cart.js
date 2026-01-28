@@ -1,10 +1,23 @@
 const cart = {
     items: [],
 
+    getStorageKey() {
+        if (window.auth && typeof window.auth.getUser === 'function') {
+            const user = window.auth.getUser();
+            if (user && user.email) {
+                return `adire_cart_${user.email}`;
+            }
+        }
+        return 'adire_cart_guest';
+    },
+
     init() {
-        const savedCart = localStorage.getItem('adire_cart');
+        const key = this.getStorageKey();
+        const savedCart = localStorage.getItem(key);
         if (savedCart) {
             this.items = JSON.parse(savedCart);
+        } else {
+            this.items = [];
         }
         this.updateUI();
     },
@@ -55,7 +68,8 @@ const cart = {
     },
 
     save() {
-        localStorage.setItem('adire_cart', JSON.stringify(this.items));
+        const key = this.getStorageKey();
+        localStorage.setItem(key, JSON.stringify(this.items));
     },
 
     updateUI() {

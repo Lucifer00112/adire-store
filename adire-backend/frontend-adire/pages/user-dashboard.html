@@ -69,12 +69,12 @@
         }
 
         .nav-link:hover {
-            color: #8B0000;
-            background: rgba(212, 175, 55, 0.1);
+            color: #4B0082;
+            background: rgba(75, 0, 130, 0.1);
         }
 
         .nav-link.active {
-            color: #8B0000;
+            color: #4B0082;
             font-weight: 600;
         }
 
@@ -82,7 +82,7 @@
             position: absolute;
             top: 0;
             right: 5px;
-            background: #8B0000;
+            background: #4B0082;
             color: white;
             font-size: 10px;
             padding: 2px 6px;
@@ -110,7 +110,7 @@
         .hero h2 {
             font-family: 'Playfair Display', serif;
             font-size: 36px;
-            color: #8B0000;
+            color: #4B0082;
             margin-bottom: 15px;
             font-weight: 700;
         }
@@ -135,20 +135,20 @@
             background: white;
             padding: 30px;
             border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(139, 0, 0, 0.1);
+            box-shadow: 0 4px 20px rgba(75, 0, 130, 0.1);
             text-align: center;
             transition: all 0.3s;
         }
 
         .stat-card:hover {
             transform: translateY(-10px);
-            box-shadow: 0 10px 30px rgba(139, 0, 0, 0.2);
+            box-shadow: 0 10px 30px rgba(75, 0, 130, 0.2);
         }
 
         .stat-icon {
             width: 60px;
             height: 60px;
-            background: linear-gradient(135deg, #8B0000 0%, #A52A2A 100%);
+            background: linear-gradient(135deg, #4B0082 0%, #6A0DAD 100%);
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -181,7 +181,7 @@
         .stat-value {
             font-size: 32px;
             font-weight: 700;
-            color: #8B0000;
+            color: #4B0082;
         }
 
         /* Adire Info Section */
@@ -189,7 +189,7 @@
             background: white;
             padding: 40px;
             border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(139, 0, 0, 0.1);
+            box-shadow: 0 4px 20px rgba(75, 0, 130, 0.1);
             max-width: 1200px;
             margin: 0 auto 40px;
             text-align: center;
@@ -198,7 +198,7 @@
         .adire-info h2 {
             font-family: 'Playfair Display', serif;
             font-size: 32px;
-            color: #8B0000;
+            color: #4B0082;
             margin-bottom: 20px;
         }
 
@@ -228,7 +228,7 @@
         .feature-icon-circle {
             width: 80px;
             height: 80px;
-            background: #8B0000;
+            background: #4B0082;
             color: white;
             border-radius: 50%;
             display: flex;
@@ -269,7 +269,7 @@
         .section-title {
             font-family: 'Playfair Display', serif;
             font-size: 42px;
-            color: #8B0000;
+            color: #4B0082;
             margin-bottom: 15px;
             font-weight: 700;
         }
@@ -296,7 +296,7 @@
 
         .product-card:hover {
             transform: translateY(-10px);
-            box-shadow: 0 10px 30px rgba(139, 0, 0, 0.2);
+            box-shadow: 0 10px 30px rgba(75, 0, 130, 0.2);
         }
 
         .product-image {
@@ -356,14 +356,14 @@
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #8B0000 0%, #A52A2A 100%);
+            background: linear-gradient(135deg, #4B0082 0%, #6A0DAD 100%);
             color: white;
             width: 100%;
             justify-content: center;
         }
 
         .btn-primary:hover {
-            box-shadow: 0 8px 20px rgba(139, 0, 0, 0.3);
+            box-shadow: 0 8px 20px rgba(75, 0, 130, 0.3);
         }
 
         /* Orders Table */
@@ -381,7 +381,7 @@
         }
 
         .orders-table th {
-            background: linear-gradient(135deg, #8B0000 0%, #A52A2A 100%);
+            background: linear-gradient(135deg, #4B0082 0%, #6A0DAD 100%);
             color: white;
             padding: 20px;
             text-align: left;
@@ -472,7 +472,7 @@
         .form-group label {
             display: block;
             margin-bottom: 10px;
-            color: #8B0000;
+            color: #4B0082;
             font-weight: 600;
             font-size: 14px;
         }
@@ -492,7 +492,7 @@
         .form-textarea:focus {
             outline: none;
             border-color: #8B0000;
-            box-shadow: 0 0 0 4px rgba(139, 0, 0, 0.1);
+            box-shadow: 0 0 0 4px rgba(75, 0, 130, 0.1);
         }
 
         .form-textarea {
@@ -516,7 +516,7 @@
         }
 
         .empty-state h3 {
-            color: #8B0000;
+            color: #4B0082;
             margin-bottom: 10px;
             font-size: 24px;
         }
@@ -627,8 +627,8 @@
                         Cart
                         <span class="cart-badge" id="cart-badge">0</span>
                     </a></li>
-                <li><a href="#" class="nav-link" onclick="showSection('profile')">Profile</a></li>
-                <li><a href="#" class="nav-link" onclick="logout()" style="color: #8B0000;">Logout</a></li>
+                <li><a href="#" class="nav-link" onclick="showSection('profile-redirect')">Profile</a></li>
+                <li><a href="#" class="nav-link" onclick="logout()" style="color: #4B0082;">Logout</a></li>
             </ul>
         </div>
     </nav>
@@ -637,7 +637,7 @@
     <div id="dashboard-section" class="content-section">
         <div class="hero">
             <h1>Eury Textiles</h1>
-            <h2>Welcome back, <span id="user-name">Mercy</span>! 👋</h2>
+            <h2 id="greeting-text">Welcome back, <span id="user-name">Mercy</span>! 👋</h2>
             <p>Your Adire world awaits</p>
         </div>
 
@@ -769,7 +769,7 @@
         </div>
         <div class="section">
             <form id="checkout-form" class="checkout-form">
-                <h3 style="margin-bottom: 30px; color: #8B0000; font-size: 24px;">Delivery Information</h3>
+                <h3 style="margin-bottom: 30px; color: #4B0082; font-size: 24px;">Delivery Information</h3>
 
                 <div class="form-group">
                     <label>Full Name *</label>
@@ -788,10 +788,10 @@
                 </div>
 
                 <div style="background: #F5EFE7; padding: 25px; border-radius: 12px; margin: 30px 0;">
-                    <h3 style="margin-bottom: 20px; color: #8B0000;">Order Summary</h3>
+                    <h3 style="margin-bottom: 20px; color: #4B0082;">Order Summary</h3>
                     <div id="checkout-summary"></div>
                     <div
-                        style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #8B0000; display: flex; justify-content: space-between; font-size: 20px; font-weight: 700;">
+                        style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #4B0082; display: flex; justify-content: space-between; font-size: 20px; font-weight: 700;">
                         <span>Total:</span>
                         <span style="color: #D4AF37;">₦<span id="checkout-total">0</span></span>
                     </div>
@@ -863,6 +863,10 @@
         let allOrders = [];
 
         function showSection(sectionName) {
+            if (sectionName === 'profile-redirect') {
+                window.location.href = 'profile.html';
+                return;
+            }
             document.querySelectorAll('.content-section').forEach(section => {
                 section.style.display = 'none';
             });
@@ -888,6 +892,21 @@
         async function loadProducts() {
             try {
                 allProducts = await api.get('/products');
+
+                // Sync cart prices with current product database
+                let cartChanged = false;
+                cart.forEach(item => {
+                    const product = allProducts.find(p => p.id === item.id);
+                    if (product && product.price !== item.price) {
+                        item.price = product.price;
+                        cartChanged = true;
+                    }
+                });
+                if (cartChanged) {
+                    localStorage.setItem('cart', JSON.stringify(cart));
+                    updateCartBadge();
+                }
+
                 displayFeaturedProducts();
                 displayAllProducts();
             } catch (err) {
@@ -1009,6 +1028,7 @@
                             <th>Items</th>
                             <th>Total</th>
                             <th>Status</th>
+                            <th style="text-align: right;">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1023,6 +1043,12 @@
                                     <td>${items.map(i => i.name + ' x' + i.quantity).join(', ')}</td>
                                     <td><strong style="color: #D4AF37;">₦${order.total.toLocaleString()}</strong></td>
                                     <td><span class="status-badge ${statusClass}">${order.status}</span></td>
+                                    <td style="text-align: right;">
+                                        ${(order.status === 'Processing' || order.status === 'Shipped') ?
+                        `<button class="btn btn-sm" style="padding: 4px 10px; font-size: 11px;" onclick="confirmOrderReceived(${order.id})">Confirm Received</button>` :
+                        ''
+                    }
+                                    </td>
                                 </tr>
                             `;
             }).join('')}
@@ -1236,6 +1262,19 @@
             await loadProducts();
             await loadOrders();
         });
+
+        async function confirmOrderReceived(orderId) {
+            if (!confirm('Have you received this order? Marking it as received will complete the order.')) return;
+
+            try {
+                await api.put(`/orders/${orderId}/received`);
+                alert('Thanks for confirming! Your order is now marked as Delivered.');
+                loadOrders(); // Refresh order history
+            } catch (err) {
+                console.error('Error confirming receipt:', err);
+                alert('An error occurred: ' + err.message);
+            }
+        }
     </script>
 </body>
 

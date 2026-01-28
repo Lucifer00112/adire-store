@@ -23,7 +23,7 @@
             padding: 40px;
             background: white;
             border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(139, 0, 0, 0.1);
+            box-shadow: 0 10px 40px rgba(75, 0, 130, 0.1);
         }
 
         .logo-box {
@@ -37,7 +37,7 @@
 
         h2 {
             font-family: 'Playfair Display', serif;
-            color: #8B0000 !important;
+            color: #4B0082 !important;
             font-size: 28px;
             margin-bottom: 30px;
         }
@@ -65,12 +65,12 @@
 
         .form-input:focus {
             outline: none;
-            border-color: #8B0000;
+            border-color: #4B0082;
             background: #FFF8F0;
         }
 
         .btn-gold {
-            background: linear-gradient(135deg, #8B0000 0%, #A52A2A 100%);
+            background: linear-gradient(135deg, #4B0082 0%, #6A0DAD 100%);
             color: white;
             border: none;
             padding: 14px;
@@ -79,12 +79,12 @@
             font-weight: 600;
             cursor: pointer;
             transition: transform 0.3s, box-shadow 0.3s;
-            box-shadow: 0 4px 15px rgba(139, 0, 0, 0.3);
+            box-shadow: 0 4px 15px rgba(75, 0, 130, 0.3);
         }
 
         .btn-gold:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(139, 0, 0, 0.4);
+            box-shadow: 0 8px 25px rgba(75, 0, 130, 0.4);
         }
 
         .error-message {
@@ -99,7 +99,7 @@
         }
 
         .signin-link {
-            color: #8B0000;
+            color: #4B0082;
             font-weight: 700;
             text-decoration: none;
         }
@@ -124,7 +124,7 @@
                 <p style="color: #666; font-size: 12px; letter-spacing: 2px; text-transform: uppercase;">Premium Adire
                     Collection</p>
             </div>
-            <h2 class="text-center mb-2">Welcome Back</h2>
+            <h2 class="text-center mb-2">Welcome presidential customer</h2>
 
             <div id="error-box" class="error-message"></div>
 
@@ -136,6 +136,10 @@
                 <div class="form-group">
                     <label for="password">Password</label>
                     <input type="password" id="password" class="form-input" placeholder="Enter your password" required>
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                    <input type="checkbox" id="remember" style="width: auto; cursor: pointer;">
+                    <label for="remember" style="margin: 0; cursor: pointer;">Remember me</label>
                 </div>
                 <button type="submit" class="btn btn-gold mb-1" style="width: 100%">Sign In</button>
                 <p class="text-center" style="color: #666; font-size: 0.9rem; margin-top: 20px;">
@@ -164,25 +168,21 @@
             try {
                 const btn = e.target.querySelector('button');
                 const originalText = btn.innerText;
+                const remember = document.getElementById('remember').checked;
                 btn.innerText = 'Signing in...';
                 btn.disabled = true;
 
-                // Check if this is admin login
-                if (email === ADMIN_EMAIL) {
-                    // Try admin login
-                    try {
-                        const res = await api.post('/admin/login', { email, password });
-                        // Store admin token for Bearer auth
-                        localStorage.setItem('admin_token', password);
-                        window.location.href = 'admin-dashboard.html';
-                        return;
-                    } catch (adminErr) {
-                        // Admin login failed, show error
-                        throw new Error('Invalid admin credentials');
-                    }
-                } else {
-                    // Regular user login
-                    const res = await auth.login(email, password);
+                // Normal login flow. Backend will handle if it's a known user.
+                // If they want to access admin, they should use admin-login.html
+                // But we'll try admin login FIRST if it fails, just in case they are following a link
+                try {
+                    const res = await api.post('/admin/login', { email, password });
+                    localStorage.setItem('admin_token', password);
+                    window.location.href = 'admin-dashboard.html';
+                    return;
+                } catch (adminErr) {
+                    // Not an admin or wrong admin pass, try regular user login
+                    const res = await auth.login(email, password, remember);
                     window.location.href = 'user-dashboard.html';
                 }
             } catch (err) {

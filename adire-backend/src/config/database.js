@@ -15,6 +15,7 @@ const connectDB = async () => {
     });
     
     console.log('✅ MongoDB Connected to Atlas!');
+    return Promise.resolve();
   } catch (error) {
     console.log('🔄 Using development mode (database not required)');
     // Don't throw error, just continue

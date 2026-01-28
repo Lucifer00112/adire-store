@@ -1,0 +1,9 @@
+ID: 7, Name: Blue & Black Geometric Adire, Price: 0
+ID: 8, Name: Deep Maroon Patterned Adire, Price: 0
+ID: 9, Name: Classic X-O Pattern Adire, Price: 0
+ID: 10, Name: Gold & Black Heritage Adire, Price: 0
+ID: 11, Name: Blue Floral Blossom Adire, Price: 0
+ID: 12, Name: Maroon & Cyan Tribal Adire, Price: 0
+ID: 13, Name: Magenta & Purple Blossom Adire, Price: 0
+ID: 14, Name: Multicolor Radiance Adire, Price: 0
+ID: 15, Name: Deep Purple Vortex Adire, Price: 0

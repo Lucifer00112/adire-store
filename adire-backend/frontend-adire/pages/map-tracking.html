@@ -16,7 +16,7 @@
 
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #FFF8F0 0%, #FAEBD7 100%);
+            background: linear-gradient(135deg, #F3E5F5 0%, #D1C4E9 100%);
             background-attachment: fixed;
         }
 
@@ -33,7 +33,7 @@
 
         .header h1 {
             font-size: 36px;
-            color: #8B0000;
+            color: #4B0082;
             margin-bottom: 10px;
             font-weight: 700;
         }
@@ -54,24 +54,24 @@
             background: white;
             border-radius: 16px;
             padding: 25px;
-            box-shadow: 0 10px 40px rgba(139, 0, 0, 0.1);
+            box-shadow: 0 10px 40px rgba(75, 0, 130, 0.1);
             overflow-y: auto;
         }
 
         .sidebar-header {
             margin-bottom: 20px;
             padding-bottom: 15px;
-            border-bottom: 2px solid #8B0000;
+            border-bottom: 2px solid #4B0082;
         }
 
         .sidebar-header h2 {
-            color: #8B0000;
+            color: #4B0082;
             font-size: 20px;
             font-weight: 700;
         }
 
         .order-item {
-            background: #FFF8F0;
+            background: #F3E5F5;
             padding: 15px;
             border-radius: 12px;
             margin-bottom: 15px;
@@ -83,11 +83,11 @@
         .order-item:hover {
             transform: translateX(5px);
             border-color: #8B0000;
-            box-shadow: 0 4px 15px rgba(139, 0, 0, 0.2);
+            box-shadow: 0 4px 15px rgba(75, 0, 130, 0.2);
         }
 
         .order-item.active {
-            background: linear-gradient(135deg, #8B0000 0%, #A52A2A 100%);
+            background: linear-gradient(135deg, #4B0082 0%, #6A0DAD 100%);
             color: white;
         }
 
@@ -127,7 +127,7 @@
 
         #map {
             border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(139, 0, 0, 0.1);
+            box-shadow: 0 10px 40px rgba(75, 0, 130, 0.1);
             height: 100%;
         }
 
@@ -138,7 +138,7 @@
             background: white;
             padding: 20px;
             border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(139, 0, 0, 0.2);
+            box-shadow: 0 10px 30px rgba(75, 0, 130, 0.2);
             z-index: 1000;
             max-width: 300px;
             display: none;
@@ -162,7 +162,7 @@
         }
 
         .route-info h3 {
-            color: #8B0000;
+            color: #4B0082;
             margin-bottom: 15px;
             font-size: 18px;
         }
@@ -192,7 +192,7 @@
         .back-link {
             display: inline-block;
             margin-bottom: 20px;
-            color: #8B0000;
+            color: #4B0082;
             text-decoration: none;
             font-weight: 600;
             transition: all 0.3s;
@@ -223,7 +223,7 @@
         }
 
         .icon-warehouse {
-            background: #8B0000;
+            background: #4B0082;
         }
 
         .icon-delivery {
@@ -270,7 +270,7 @@
                 </div>
 
                 <div class="legend">
-                    <h4 style="color: #8B0000; margin-bottom: 15px;">Map Legend</h4>
+                    <h4 style="color: #4B0082; margin-bottom: 15px;">Map Legend</h4>
                     <div class="legend-item">
                         <div class="legend-icon icon-warehouse"></div>
                         <span>Warehouse / Origin</span>
@@ -333,7 +333,7 @@
             // Add warehouse marker (Eury Textiles HQ)
             const warehouseIcon = L.divIcon({
                 className: 'custom-marker',
-                html: '<div style="background: #8B0000; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.3);"></div>',
+                html: '<div style="background: #4B0082; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.3);"></div>',
                 iconSize: [30, 30]
             });
 
@@ -464,7 +464,7 @@
                 routeWhileDragging: false,
                 addWaypoints: false,
                 lineOptions: {
-                    styles: [{ color: '#8B0000', opacity: 0.8, weight: 6 }]
+                    styles: [{ color: '#4B0082', opacity: 0.8, weight: 6 }]
                 },
                 createMarker: function () { return null; }, // Don't create default markers
                 show: false // Hide the routing instructions panel

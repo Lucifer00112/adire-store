@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track Order - Eury Textiles</title>
+    <link rel="stylesheet" href="../css/index.css">
+    <style>
+        .track-container {
+            padding: 80px 0;
+            min-height: 80vh;
+            max-width: 600px;
+        }
+
+        .status-box {
+            padding: 30px;
+            text-align: center;
+            border: 2px solid var(--accent-gold);
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav class="navbar glass-panel" style="margin: 0 5%; top: 10px; border-radius: 50px;">
+        <div class="logo">
+            <a href="../index.html"><img src="../images/logo.png" alt="Eury Textiles" height="50"></a>
+        </div>
+    </nav>
+
+    <div class="container track-container">
+        <div class="glass-panel" style="padding: 40px;">
+            <h2 class="text-center mb-1">Track Your Order</h2>
+            <p class="text-center mb-2" style="color: var(--text-muted)">Enter your Order ID to see your status.</p>
+
+            <div class="form-group">
+                <input type="text" id="order-id" class="form-input text-center" placeholder="Enter Order ID (e.g. 1)"
+                    style="font-size: 1.2rem;">
+            </div>
+            <button id="track-btn" class="btn btn-gold" style="width: 100%; padding: 15px;">Track Order</button>
+        </div>
+
+        <div id="status-result" class="glass-panel status-box mt-2">
+            <h3 id="res-id" class="mb-1">Order #0</h3>
+            <div style="font-size: 3rem;" class="mb-1">🚚</div>
+            <h2 id="res-status" style="color: var(--primary-indigo)">Pending</h2>
+            <p id="res-date" class="text-muted mt-1"></p>
+            <p class="mt-2" style="font-size: 0.9rem;">We'll call you at <strong id="res-phone"></strong> when we're
+                ready to deliver.</p>
+        </div>
+
+        <div id="error-msg" class="text-center mt-2" style="color: #d32f2f; display: none;">Order not found. Please
+            check the ID.</div>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        document.getElementById('track-btn').addEventListener('click', async () => {
+            const id = document.getElementById('order-id').value;
+            const result = document.getElementById('status-result');
+            const error = document.getElementById('error-msg');
+
+            result.style.display = 'none';
+            error.style.display = 'none';
+
+            if (!id) return;
+
+            try {
+                const order = await api.get(`/track/${id}`);
+
+                if (order && !order.error) {
+                    document.getElementById('res-id').innerText = `Order #${order.id}`;
+                    document.getElementById('res-status').innerText = order.status;
+                    document.getElementById('res-date').innerText = `Placed on ${new Date(order.created_at).toLocaleDateString()}`;
+                    document.getElementById('res-phone').innerText = order.phone;
+                    result.style.display = 'block';
+                } else {
+                    error.style.display = 'block';
+                }
+            } catch (err) {
+                error.innerText = "Order not found. Please check the ID.";
+                error.style.display = 'block';
+            }
+        });
+    </script>
+
+</body>
+
+</html>

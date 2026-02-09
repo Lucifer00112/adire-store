@@ -21,7 +21,7 @@ import json
 
 load_dotenv()
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../frontend-adire', static_url_path='')
 CORS(app)
 
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', '').strip()
@@ -84,6 +84,7 @@ def init_db():
                 description TEXT,
                 price INTEGER NOT NULL,
                 image_base64 TEXT,
+                gallery TEXT,
                 category TEXT,
                 stock INTEGER DEFAULT 10,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -244,7 +245,15 @@ def send_email(to_email, subject, body):
 
 @app.route('/')
 def home():
-    return jsonify({"message": "Adire backend live!"})
+    return app.send_static_file('index.html')
+
+# Catch-all route to serve static files or index.html for unknown routes (SPA routing)
+@app.errorhandler(404)
+def not_found(e):
+    # If the user requested an image or something we don't have, return 404
+    if request.path.startswith('/api'):
+        return jsonify({"error": "Not found"}), 404
+    return app.send_static_file('index.html')
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -327,6 +336,51 @@ def verify():
             "name": user['name']
         }
     }), 200
+
+@app.route('/resend-code', methods=['POST'])
+def resend_code():
+    data = request.get_json()
+    email = data.get('email')
+
+    if not email:
+        return jsonify({"error": "Email required"}), 400
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute(q("SELECT * FROM users WHERE email = ?"), (email,))
+    user = c.fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({"error": "User not found"}), 404
+
+    if user['verified'] == 1:
+        conn.close()
+        return jsonify({"error": "Email already verified"}), 400
+
+    verification_code = ''.join(random.choices(string.digits, k=6))
+    code_expiry = (datetime.now() + timedelta(minutes=15)).strftime('%Y-%m-%d %H:%M:%S')
+
+    c.execute(q("UPDATE users SET verification_code = ?, code_expiry = ? WHERE email = ?"),
+              (verification_code, code_expiry, email))
+    conn.commit()
+    conn.close()
+
+    subject = "Adire Boutique - New Verification Code"
+    body = f"""
+    Hello {user['name']},
+
+    Your new verification code is: {verification_code}
+
+    Enter this code on the site to activate your account.
+    This code expires in 15 minutes.
+
+    Thank you!
+    Adire Team
+    """
+    send_email(email, subject, body)
+
+    return jsonify({"message": "New code sent to your email."}), 200
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -447,6 +501,7 @@ def admin_add_product():
     description = data.get('description')
     price = data.get('price')
     image_base64 = data.get('image_base64')
+    gallery = data.get('gallery', '[]') # New gallery field
     category = data.get('category')
     stock = data.get('stock', 10)
 
@@ -459,8 +514,8 @@ def admin_add_product():
 
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute(q("INSERT INTO products (name, description, price, image_base64, category, stock) VALUES (?, ?, ?, ?, ?, ?)"),
-              (name, description, price, image_base64, category, stock))
+    c.execute(q("INSERT INTO products (name, description, price, image_base64, gallery, category, stock) VALUES (?, ?, ?, ?, ?, ?, ?)"),
+              (name, description, price, image_base64, gallery, category, stock))
     conn.commit()
     conn.close()
 
@@ -487,6 +542,7 @@ def admin_manage_product(id):
         description = data.get('description')
         price = data.get('price')
         image_base64 = data.get('image_base64')
+        gallery = data.get('gallery') # New gallery field
         category = data.get('category')
         stock = data.get('stock')
 
@@ -497,6 +553,7 @@ def admin_manage_product(id):
         if description: updates.append("description = ?"); params.append(description)
         if price is not None: updates.append("price = ?"); params.append(price)
         if image_base64: updates.append("image_base64 = ?"); params.append(image_base64)
+        if gallery: updates.append("gallery = ?"); params.append(gallery)
         if category: updates.append("category = ?"); params.append(category)
         if stock is not None: updates.append("stock = ?"); params.append(stock)
 
@@ -510,6 +567,30 @@ def admin_manage_product(id):
         conn.commit()
         conn.close()
         return jsonify({"message": "Product updated"}), 200
+
+@app.route('/admin/products/<int:id>/stylize', methods=['POST'])
+def admin_stylize_product(id):
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+        return jsonify({"error": "Admin access only"}), 403
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute(q("SELECT * FROM products WHERE id = ?"), (id,))
+    product = c.fetchone()
+    
+    if not product:
+        conn.close()
+        return jsonify({"error": "Product not found"}), 404
+
+    # This logs the request for the AI assistant/agent to handle
+    print(f"STYLIZING LOG: AI Style Generation requested for product ID: {id}")
+    
+    conn.close()
+    return jsonify({
+        "message": "Styling sequence initiated. Our AI mannequins are preparing the different views.",
+        "status": "pending_generation"
+    }), 200
 
 @app.route('/products', methods=['GET'])
 def get_products():

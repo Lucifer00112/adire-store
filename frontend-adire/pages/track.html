@@ -70,8 +70,8 @@
             try {
                 const order = await api.get(`/track/${id}`);
 
-                if (order && !order.error) {
-                    document.getElementById('res-id').innerText = `Order #${order.id}`;
+                if (order) {
+                    document.getElementById('res-id').innerText = `Order #${order.id.substring(0, 8)}`;
                     document.getElementById('res-status').innerText = order.status;
                     document.getElementById('res-date').innerText = `Placed on ${new Date(order.created_at).toLocaleDateString()}`;
                     document.getElementById('res-phone').innerText = order.phone;

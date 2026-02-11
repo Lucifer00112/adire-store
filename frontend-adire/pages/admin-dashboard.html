@@ -1043,12 +1043,34 @@
     </div>
 
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/supabase-config.js"></script>
     <script src="../js/api.js"></script>
+    <script src="../js/auth.js"></script>
     <script>
-        const adminToken = localStorage.getItem('admin_token');
-        if (!adminToken) window.location.href = 'admin-login.html';
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = auth.getUser();
+            if (!user) {
+                window.location.href = 'login.html';
+                return;
+            }
 
+            // Extra safety: check if user is actually an admin in the profiles table
+            const profile = await api.get('/user/profile');
+            if (profile.role !== 'admin') {
+                alert('Access Denied: Admin role required.');
+                window.location.href = 'user-dashboard.html';
+                return;
+            }
+
+            // Init dashboard
+            loadDashboard();
+        });
+
+        let allProducts = [];
+        let allOrders = [];
         let base64Image = '';
+        let currentTab = 'dashboard';
 
         // Navigation
         function switchTab(tabId, element) {
@@ -1107,12 +1129,12 @@
             const products = await api.get('/products');
             document.getElementById('products-body').innerHTML = products.map(p => `
                 <tr>
-                    <td><img src="${p.image_base64 || '../img/placeholder.jpg'}" style="width:50px; height:50px; object-fit:cover; border-radius:8px;" onerror="this.src='../img/placeholder.jpg'"></td>
+                    <td><img src="${p.image_url || '../img/placeholder.jpg'}" style="width:50px; height:50px; object-fit:cover; border-radius:8px;" onerror="this.src='../img/placeholder.jpg'"></td>
                     <td><strong>${p.name}</strong></td>
                     <td>${p.category}</td>
                     <td>₦${p.price.toLocaleString()}</td>
                     <td>${p.stock}</td>
-                    <td><button class="btn btn-sm btn-outline" onclick="openEditProduct(${p.id})">Edit</button></td>
+                    <td><button class="btn btn-sm btn-outline" onclick="openEditProduct('${p.id}')">Edit</button></td>
                 </tr>
             `).join('');
         }
@@ -1146,8 +1168,9 @@
             document.getElementById('gallery-container').innerHTML = galleryHtml;
 
             const preview = document.getElementById('edit-img-preview');
-            if (p.image_base64) {
-                preview.src = p.image_base64;
+            const imageUrl = p.image_url || p.image_base64;
+            if (imageUrl) {
+                preview.src = imageUrl;
                 preview.style.display = 'block';
             } else {
                 preview.style.display = 'none';
@@ -1171,6 +1194,38 @@
 
         document.getElementById('edit-product-form').addEventListener('submit', async e => {
             e.preventDefault();
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'Saving...';
+
+            let imageUrl = null;
+            const fileInput = document.getElementById('edit-p-image');
+            if (fileInput.files.length > 0) {
+                try {
+                    const file = fileInput.files[0];
+                    const fileExt = file.name.split('.').pop();
+                    const fileName = `${Date.now()}.${fileExt}`;
+                    const filePath = `products/${fileName}`;
+
+                    const { data, error } = await window.supabase.storage
+                        .from('product-image')
+                        .upload(filePath, file);
+
+                    if (error) throw error;
+
+                    const { data: { publicUrl } } = window.supabase.storage
+                        .from('product-image')
+                        .getPublicUrl(filePath);
+
+                    imageUrl = publicUrl;
+                } catch (err) {
+                    alert('Image upload failed: ' + err.message);
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = 'Save Changes';
+                    return;
+                }
+            }
+
             const data = {
                 name: document.getElementById('edit-p-name').value,
                 category: document.getElementById('edit-p-category').value,
@@ -1178,13 +1233,20 @@
                 stock: parseInt(document.getElementById('edit-p-stock').value),
                 description: document.getElementById('edit-p-desc').value
             };
-            if (editBase64Image) data.image_base64 = editBase64Image;
+            if (imageUrl) data.image_url = imageUrl;
 
-            await api.put(`/admin/products/${currentEditingProductId}`, data, { 'Authorization': `Bearer ${adminToken}` });
-            alert('Product Updated!');
-            closeModal('edit-product-modal');
-            fetchProducts();
-            loadDashboard();
+            try {
+                await api.put(`/admin/products/${currentEditingProductId}`, data);
+                alert('Product Updated!');
+                closeModal('edit-product-modal');
+                fetchProducts();
+                loadDashboard();
+            } catch (err) {
+                alert('Update failed: ' + err.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'Save Changes';
+            }
         });
 
         async function deleteProduct() {
@@ -1200,17 +1262,20 @@
         async function fetchOrders(page = 1) {
             const search = document.getElementById('order-search').value;
             const status = document.getElementById('order-status-filter').value;
-            const res = await api.get(`/admin/orders?search=${search}&status=${status}&page=${page}`, { 'Authorization': `Bearer ${adminToken}` });
+            const res = await api.get(`/admin/orders?search=${search}&status=${status}&page=${page}`);
 
-            document.getElementById('orders-body').innerHTML = res.orders.map(o => `
+            // Handle both array response or object with orders property
+            const orders = Array.isArray(res) ? res : (res.orders || []);
+
+            document.getElementById('orders-body').innerHTML = orders.map(o => `
                 <tr>
-                    <td>#${o.id}</td>
+                    <td>#${o.id.substring(0, 8)}</td>
                     <td>${o.user_email}</td>
-                    <td>${JSON.parse(o.items).length} items</td>
+                    <td>${o.items.length} items</td>
                     <td>₦${o.total.toLocaleString()}</td>
                     <td><span class="status-badge status-${o.status.toLowerCase()}">${o.status}</span></td>
                     <td>${new Date(o.created_at).toLocaleDateString()}</td>
-                    <td><button class="btn btn-sm btn-outline" onclick="openOrderDetail(${o.id})">View</button></td>
+                    <td><button class="btn btn-sm btn-outline" onclick="openOrderDetail('${o.id}')">View</button></td>
                 </tr>
             `).join('');
 
@@ -1432,13 +1497,13 @@
         }
 
         async function approveReview(id) {
-            await api.put(`/admin/reviews/${id}`, { status: 'Approved' }, { 'Authorization': `Bearer ${adminToken}` });
+            await api.put(`/admin/reviews/${id}`, { status: 'Approved' });
             fetchReviews();
         }
 
         async function deleteReview(id) {
             if (confirm('Delete review?')) {
-                await api.delete(`/admin/reviews/${id}`, { 'Authorization': `Bearer ${adminToken}` });
+                await api.delete(`/admin/reviews/${id}`);
                 fetchReviews();
             }
         }
@@ -1457,30 +1522,69 @@
 
         document.getElementById('product-form').addEventListener('submit', async e => {
             e.preventDefault();
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'Publishing...';
+
+            let imageUrl = null;
+            const fileInput = document.getElementById('p-image');
+            if (fileInput.files.length > 0) {
+                try {
+                    const file = fileInput.files[0];
+                    const fileExt = file.name.split('.').pop();
+                    const fileName = `${Date.now()}.${fileExt}`;
+                    const filePath = `products/${fileName}`;
+
+                    const { data, error } = await window.supabase.storage
+                        .from('product-image')
+                        .upload(filePath, file);
+
+                    if (error) throw error;
+
+                    const { data: { publicUrl } } = window.supabase.storage
+                        .from('product-image')
+                        .getPublicUrl(filePath);
+
+                    imageUrl = publicUrl;
+                } catch (err) {
+                    alert('Image upload failed: ' + err.message);
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = 'Publish Product';
+                    return;
+                }
+            }
+
             const data = {
                 name: document.getElementById('p-name').value,
                 category: document.getElementById('p-category').value,
                 price: parseInt(document.getElementById('p-price').value),
                 stock: 10,
                 description: document.getElementById('p-desc').value,
-                image_base64: base64Image
+                image_url: imageUrl
             };
-            const res = await api.post('/admin/products', data, { 'Authorization': `Bearer ${adminToken}` });
 
-            // Automatically trigger Styling
-            if (confirm('Product Published! Would you like to automatically generate AI Mannequin styles for this fabric?')) {
-                // We'd ideally need the ID of the new product. 
-                // Let's assume the response contains it or we fetch the latest.
-                const products = await api.get('/products');
-                const newId = Math.max(...products.map(p => p.id));
-                await api.post(`/admin/products/${newId}/stylize`, {}, { 'Authorization': `Bearer ${adminToken}` });
-                alert('AI Styling initiated! Processing in background.');
-            } else {
+            try {
+                const res = await api.post('/admin/products', data);
+                // Supabase returns the inserted object in the response if handleResponse is correctly configured.
+                // In our current api.js, it returns data which is the array of inserted items.
+                const newProduct = res[0];
+
                 alert('Product Published!');
-            }
 
-            closeModal('product-modal');
-            fetchProducts();
+                if (newProduct && confirm('Product Published! Would you like to automatically generate AI Mannequin styles for this fabric?')) {
+                    await api.post(`/admin/products/${newProduct.id}/stylize`, {});
+                    alert('AI Styling initiated! Processing in background.');
+                }
+
+                closeModal('product-modal');
+                fetchProducts();
+                loadDashboard();
+            } catch (err) {
+                alert('Publishing failed: ' + err.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'Publish Product';
+            }
         });
 
         async function removeFromGallery(index) {

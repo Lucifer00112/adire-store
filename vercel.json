@@ -1,15 +1,31 @@
 {
     "version": 2,
-    "builds": [
+    "cleanUrls": true,
+    "public": true,
+    "rewrites": [
         {
-            "src": "adire-backend/api/index.py",
-            "use": "@vercel/python"
-        }
-    ],
-    "routes": [
+            "source": "/",
+            "destination": "/frontend-adire/index.html"
+        },
         {
-            "src": "/(.*)",
-            "dest": "adire-backend/api/index.py"
+            "source": "/js/(.*)",
+            "destination": "/frontend-adire/js/$1"
+        },
+        {
+            "source": "/css/(.*)",
+            "destination": "/frontend-adire/css/$1"
+        },
+        {
+            "source": "/images/(.*)",
+            "destination": "/frontend-adire/images/$1"
+        },
+        {
+            "source": "/img/(.*)",
+            "destination": "/frontend-adire/img/$1"
+        },
+        {
+            "source": "/pages/(.*)",
+            "destination": "/frontend-adire/pages/$1"
         }
     ]
 }

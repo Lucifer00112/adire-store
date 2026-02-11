@@ -343,6 +343,8 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/supabase-config.js"></script>
     <script src="../js/api.js"></script>
     <script>
         const trackForm = document.getElementById('track-form');
@@ -364,7 +366,7 @@
                 const order = await api.get(`/track/${orderId}`);
 
                 // Populate order details
-                document.getElementById('result-order-id').textContent = order.id;
+                document.getElementById('result-order-id').textContent = order.id.substring(0, 8);
                 document.getElementById('result-date').textContent = new Date(order.created_at).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'long',
@@ -375,7 +377,7 @@
                 document.getElementById('result-phone').textContent = order.phone || 'Not provided';
 
                 // Populate items
-                const items = JSON.parse(order.items);
+                const items = order.items; // Supabase returns JSONB as an object
                 const itemsHTML = items.map(item => `
                     <div class="detail-row">
                         <span class="detail-label">${item.name} x${item.quantity}</span>

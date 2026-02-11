@@ -128,18 +128,18 @@
                 const el = document.createElement('div');
                 el.className = 'cart-item glass-panel';
                 el.innerHTML = `
-                <img src="${item.image_base64 || 'https://via.placeholder.com/100'}" alt="${item.name}">
+                <img src="${item.image_url || '../img/placeholder.jpg'}" alt="${item.name}">
                 <div class="cart-details">
                     <h4>${item.name}</h4>
                     <p class="text-muted" style="font-size: 0.8rem">${item.category || 'Fabric'}</p>
                     <p style="font-weight: 600; color: var(--primary-indigo)">₦${item.price.toLocaleString()}</p>
                 </div>
                 <div class="qty-controls">
-                    <button class="qty-btn" onclick="updateQty(${item.id}, -1)">-</button>
+                    <button class="qty-btn" onclick="updateQty('${item.id}', -1)">-</button>
                     <span>${item.quantity}</span>
-                    <button class="qty-btn" onclick="updateQty(${item.id}, 1)">+</button>
+                    <button class="qty-btn" onclick="updateQty('${item.id}', 1)">+</button>
                 </div>
-                <button onclick="cart.removeItem(${item.id})" style="border:none; background:none; cursor:pointer; color:#d32f2f">🗑️</button>
+                <button onclick="cart.removeItem('${item.id}')" style="border:none; background:none; cursor:pointer; color:#d32f2f">🗑️</button>
             `;
                 list.appendChild(el);
             });

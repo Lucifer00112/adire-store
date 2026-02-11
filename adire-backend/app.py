@@ -247,6 +247,10 @@ def send_email(to_email, subject, body):
 def home():
     return app.send_static_file('index.html')
 
+@app.route('/healthz')
+def healthz():
+    return "OK"
+
 # Catch-all route to serve static files or index.html for unknown routes (SPA routing)
 @app.errorhandler(404)
 def not_found(e):

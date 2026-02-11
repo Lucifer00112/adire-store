@@ -1,0 +1,6 @@
+adire-backend/
+requirements.txt
+*.py
+*.db
+.git/
+brain/

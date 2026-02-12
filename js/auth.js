@@ -34,7 +34,7 @@ const auth = {
         if (error) throw error;
         this.currentUser = null;
         if (window.cart) window.cart.init();
-        window.location.href = '/frontend-adire/index.html';
+        window.location.href = '/index.html';
     },
 
     getUser() {
@@ -84,6 +84,11 @@ const auth = {
         // Construct the redirect URL for the reset password page
         // Since we moved to the root, the path should be relative to the site origin
         const resetUrl = `${window.location.origin}/pages/reset-password.html`;
+
+        // Handle local testing vs production URL
+        const finalUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? resetUrl
+            : `${window.location.origin}/pages/reset-password.html`;
 
         const { error } = await window.supabase.auth.resetPasswordForEmail(email, {
             redirectTo: resetUrl,

@@ -80,6 +80,18 @@ const auth = {
         return { success: true };
     },
 
+    async resetPassword(email) {
+        // Construct the redirect URL for the reset password page
+        // Since we moved to the root, the path should be relative to the site origin
+        const resetUrl = `${window.location.origin}/pages/reset-password.html`;
+
+        const { error } = await window.supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: resetUrl,
+        });
+        if (error) throw error;
+        return { success: true };
+    },
+
     isLoggedIn() {
         return !!this.getUser();
     }

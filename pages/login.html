@@ -157,27 +157,25 @@
         const loginForm = document.getElementById('login-form');
         const errorBox = document.getElementById('error-box');
 
-        // Admin email from backend (hardcoded to match .env)
-        const ADMIN_EMAIL = 'adireboutique.noreply@gmail.com';
-
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value.trim().toLowerCase();
             const password = document.getElementById('password').value;
+            const btn = e.target.querySelector('button');
 
             errorBox.style.display = 'none';
 
             try {
-                const btn = e.target.querySelector('button');
                 const remember = document.getElementById('remember').checked;
                 btn.innerText = 'Signing in...';
                 btn.disabled = true;
 
-                // Supabase Login
-                const { user } = await auth.login(email, password, remember);
+                // 1. Supabase Login
+                await auth.login(email, password, remember);
 
-                // Fetch profile to check for admin role
+                // 2. Check for admin role
                 const profile = await auth.getUserProfile();
+
                 if (profile && profile.role === 'admin') {
                     window.location.href = 'admin-dashboard.html';
                 } else {
@@ -186,7 +184,6 @@
             } catch (err) {
                 errorBox.innerText = err.message || 'Login failed';
                 errorBox.style.display = 'block';
-                const btn = e.target.querySelector('button');
                 btn.innerText = 'Sign In';
                 btn.disabled = false;
             }

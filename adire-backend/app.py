@@ -21,7 +21,7 @@ import json
 
 load_dotenv()
 
-app = Flask(__name__, static_folder='../frontend-adire', static_url_path='')
+app = Flask(__name__, static_folder='..', static_url_path='')
 CORS(app)
 
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', '').strip()

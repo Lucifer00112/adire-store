@@ -1,0 +1,24 @@
+{
+  "name": "adire-store",
+  "version": "1.0.0",
+  "description": "Welcome to the official repository for **Eury Textiles**, a luxury e-commerce platform dedicated to authentic, hand-dyed Adire fabrics from the heart of Yorubaland.",
+  "main": "check_login.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lucifer00112/adire-store.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Lucifer00112/adire-store/issues"
+  },
+  "homepage": "https://github.com/Lucifer00112/adire-store#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.95.3"
+  }
+}

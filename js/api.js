@@ -1,96 +1,64 @@
 const api = {
-    // Utility to handle Supabase responses
-    async handleResponse({ data, error }) {
-        if (error) {
-            console.error("Supabase Error:", error);
-            throw new Error(error.message);
+    // Replace with your Render URL once deployment is complete
+    baseUrl: window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
+        ? 'http://127.0.0.1:5000'
+        : 'https://adire-backend.onrender.com', // Placeholder URL
+
+    async request(endpoint, options = {}) {
+        const url = `${this.baseUrl}${endpoint}`;
+        const headers = {
+            'Content-Type': 'application/json',
+            ...options.headers
+        };
+
+        // Add Authorization header if user is logged in
+        const user = window.auth.getUser();
+        if (user && user.password && !headers['Authorization']) {
+            // For simple admin auth, we use the password as the token for now
+            headers['Authorization'] = `Bearer ${user.password}`;
         }
-        return data;
+
+        const response = await fetch(url, {
+            ...options,
+            headers
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || result.message || 'API request failed');
+        }
+        return result;
     },
 
-    // GET products/data
-    async get(endpoint) {
-        // Simple router for endpoints
-        if (endpoint === '/products') {
-            return await this.handleResponse(
-                await window.supabase.from('products').select('*')
-            );
-        }
-
-        if (endpoint.startsWith('/orders/')) {
-            const email = endpoint.split('/orders/')[1];
-            return await this.handleResponse(
-                await window.supabase.from('orders').select('*').eq('user_email', email).order('created_at', { ascending: false })
-            );
-        }
-
-        if (endpoint.startsWith('/user/profile')) {
-            const user = window.auth.getUser();
-            return await this.handleResponse(
-                await window.supabase.from('profiles').select('*').eq('id', user.id).single()
-            );
-        }
-
-        if (endpoint.startsWith('/track/')) {
-            const orderId = endpoint.split('/track/')[1];
-            return await this.handleResponse(
-                await window.supabase.from('orders').select('*').ilike('id', `${orderId}%`).single()
-            );
-        }
-
-        const table = endpoint.replace('/', '');
-        return await this.handleResponse(
-            await window.supabase.from(table).select('*')
-        );
+    async get(endpoint, options = {}) {
+        const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+        return await this.request(path, { method: 'GET', ...options });
     },
 
-    // POST data (Orders, Registration happens in auth.js)
-    async post(endpoint, data) {
-        if (endpoint === '/orders') {
-            return await this.handleResponse(
-                await window.supabase.from('orders').insert([data])
-            );
-        }
-
-        const table = endpoint.replace('/', '');
-        return await this.handleResponse(
-            await window.supabase.from(table).insert([data])
-        );
+    async post(endpoint, data, options = {}) {
+        const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+        return await this.request(path, {
+            method: 'POST',
+            body: JSON.stringify(data),
+            ...options
+        });
     },
 
-    // PUT data
-    async put(endpoint, data) {
-        // Handle order confirmation
-        if (endpoint.includes('/received')) {
-            const orderId = endpoint.split('/orders/')[1].split('/')[0];
-            return await this.handleResponse(
-                await window.supabase.from('orders').update({
-                    status: 'Delivered',
-                    delivery_status: 'Delivered'
-                }).eq('id', orderId)
-            );
-        }
-
-        // For profile updates:
-        if (endpoint.includes('/user/profile')) {
-            const user = window.auth.getUser();
-            return await this.handleResponse(
-                await window.supabase.from('profiles').update(data).eq('id', user.id)
-            );
-        }
-
-        const table = endpoint.split('/')[1];
-        return await this.handleResponse(
-            await window.supabase.from(table).update(data)
-        );
+    async put(endpoint, data, options = {}) {
+        const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+        return await this.request(path, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+            ...options
+        });
     },
 
-    async delete(endpoint) {
-        const table = endpoint.replace('/', '');
-        return await this.handleResponse(
-            await window.supabase.from(table).delete()
-        );
+    async delete(endpoint, options = {}) {
+        const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+        return await this.request(path, { method: 'DELETE', ...options });
     }
 };
 
+
 window.api = api;
+

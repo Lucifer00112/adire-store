@@ -1067,10 +1067,12 @@
             loadDashboard();
         });
 
+        const adminToken = auth.getUser()?.password || '';
         let allProducts = [];
         let allOrders = [];
         let base64Image = '';
         let currentTab = 'dashboard';
+
 
         // Navigation
         function switchTab(tabId, element) {

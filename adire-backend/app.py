@@ -18,6 +18,7 @@ import random
 import string
 import base64
 import json
+import requests
 
 load_dotenv()
 
@@ -32,19 +33,27 @@ EMAIL_HOST = os.getenv('EMAIL_HOST')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT') or 587)
 
 DATABASE_URL = os.getenv('DATABASE_URL')
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = os.path.join(BASE_DIR, "adire.db")
 
 def get_db_connection():
-    if DATABASE_URL:
-        if not PSYCOPG2_AVAILABLE:
-            raise Exception("Postgres support (psycopg2) is not installed. Please run 'pip install psycopg2-binary'")
-        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-        conn.autocommit = True
+    try:
+        if DATABASE_URL:
+            if not PSYCOPG2_AVAILABLE:
+                raise Exception("Postgres support (psycopg2) is not installed. Please run 'pip install psycopg2-binary'")
+            # Add a timeout to the connection attempt for cloud environments
+            conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor, connect_timeout=5)
+            conn.autocommit = True
+            return conn
+        
+        conn = sqlite3.connect(DB_NAME)
+        conn.row_factory = sqlite3.Row
         return conn
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
+    except Exception as e:
+        print(f"Database Connection Error: {e}")
+        return None
 
 def q(query):
     return query.replace('?', '%s') if DATABASE_URL else query
@@ -57,154 +66,191 @@ def log_admin_action(admin_email, action, details=None):
     conn.commit()
     conn.close()
 
+def rest_fallback_request(table, method='GET', query_params=None, data=None):
+    """Helper to perform Supabase REST API requests as a fallback"""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+        
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation"
+    }
+    
+    try:
+        if method == 'GET':
+            resp = requests.get(url, headers=headers, params=query_params, timeout=10)
+        elif method == 'POST':
+            resp = requests.post(url, headers=headers, json=data, timeout=10)
+        elif method == 'PATCH':
+            resp = requests.patch(url, headers=headers, json=data, params=query_params, timeout=10)
+        else:
+            return None
+            
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        print(f"REST Fallback Error: {e}")
+        return None
+
+@app.errorhandler(500)
+def handle_500(e):
+    return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
 def init_db():
-    conn = get_db_connection()
-    c = conn.cursor()
-    
-    if not DATABASE_URL:
-        # SQLite
-        tables = [
-            '''CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                name TEXT,
-                phone TEXT,
-                status TEXT DEFAULT 'Active',
-                admin_notes TEXT,
-                verified INTEGER DEFAULT 0,
-                verification_code TEXT,
-                code_expiry DATETIME,
-                last_login DATETIME,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )''',
-            '''CREATE TABLE IF NOT EXISTS products (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                description TEXT,
-                price INTEGER NOT NULL,
-                image_base64 TEXT,
-                gallery TEXT,
-                category TEXT,
-                stock INTEGER DEFAULT 10,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )''',
-            '''CREATE TABLE IF NOT EXISTS orders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_email TEXT NOT NULL,
-                items TEXT NOT NULL,
-                total INTEGER NOT NULL,
-                address TEXT,
-                phone TEXT,
-                status TEXT DEFAULT 'Pending',
-                payment_status TEXT DEFAULT 'Unpaid',
-                delivery_status TEXT DEFAULT 'Pending',
-                delivery_method TEXT,
-                tracking_number TEXT,
-                estimated_delivery DATETIME,
-                timeline TEXT,
-                refunded_amount INTEGER DEFAULT 0,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )''',
-            '''CREATE TABLE IF NOT EXISTS reviews (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                product_id INTEGER,
-                user_name TEXT,
-                rating INTEGER,
-                comment TEXT,
-                status TEXT DEFAULT 'Pending',
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )''',
-            '''CREATE TABLE IF NOT EXISTS admin_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                admin_email TEXT NOT NULL,
-                action TEXT NOT NULL,
-                details TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )''',
-            '''CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )'''
-        ]
-    else:
-        # Postgres
-        tables = [
-            '''CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                email TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                name TEXT,
-                phone TEXT,
-                status TEXT DEFAULT 'Active',
-                admin_notes TEXT,
-                verified INTEGER DEFAULT 0,
-                verification_code TEXT,
-                code_expiry TIMESTAMP,
-                last_login TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )''',
-            '''CREATE TABLE IF NOT EXISTS products (
-                id SERIAL PRIMARY KEY,
-                name TEXT NOT NULL,
-                description TEXT,
-                price INTEGER NOT NULL,
-                image_base64 TEXT,
-                category TEXT,
-                stock INTEGER DEFAULT 10,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )''',
-            '''CREATE TABLE IF NOT EXISTS orders (
-                id SERIAL PRIMARY KEY,
-                user_email TEXT NOT NULL,
-                items TEXT NOT NULL,
-                total INTEGER NOT NULL,
-                address TEXT,
-                phone TEXT,
-                status TEXT DEFAULT 'Pending',
-                payment_status TEXT DEFAULT 'Unpaid',
-                delivery_status TEXT DEFAULT 'Pending',
-                delivery_method TEXT,
-                tracking_number TEXT,
-                estimated_delivery TIMESTAMP,
-                timeline TEXT,
-                refunded_amount INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )''',
-            '''CREATE TABLE IF NOT EXISTS reviews (
-                id SERIAL PRIMARY KEY,
-                product_id INTEGER,
-                user_name TEXT,
-                rating INTEGER,
-                comment TEXT,
-                status TEXT DEFAULT 'Pending',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )''',
-            '''CREATE TABLE IF NOT EXISTS admin_logs (
-                id SERIAL PRIMARY KEY,
-                admin_email TEXT NOT NULL,
-                action TEXT NOT NULL,
-                details TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )''',
-            '''CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )'''
-        ]
+    try:
+        conn = get_db_connection()
+        if not conn:
+            print("Skipping DB initialization: Connection failed.")
+            return
+            
+        c = conn.cursor()
+        
+        if not DATABASE_URL:
+            # SQLite
+            tables = [
+                '''CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT UNIQUE NOT NULL,
+                    password TEXT NOT NULL,
+                    name TEXT,
+                    phone TEXT,
+                    status TEXT DEFAULT 'Active',
+                    admin_notes TEXT,
+                    verified INTEGER DEFAULT 0,
+                    verification_code TEXT,
+                    code_expiry DATETIME,
+                    last_login DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )''',
+                '''CREATE TABLE IF NOT EXISTS products (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    price INTEGER NOT NULL,
+                    image_base64 TEXT,
+                    gallery TEXT,
+                    category TEXT,
+                    stock INTEGER DEFAULT 10,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )''',
+                '''CREATE TABLE IF NOT EXISTS orders (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_email TEXT NOT NULL,
+                    items TEXT NOT NULL,
+                    total INTEGER NOT NULL,
+                    address TEXT,
+                    phone TEXT,
+                    status TEXT DEFAULT 'Pending',
+                    payment_status TEXT DEFAULT 'Unpaid',
+                    delivery_status TEXT DEFAULT 'Pending',
+                    delivery_method TEXT,
+                    tracking_number TEXT,
+                    estimated_delivery DATETIME,
+                    timeline TEXT,
+                    refunded_amount INTEGER DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )''',
+                '''CREATE TABLE IF NOT EXISTS reviews (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    product_id INTEGER,
+                    user_name TEXT,
+                    rating INTEGER,
+                    comment TEXT,
+                    status TEXT DEFAULT 'Pending',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )''',
+                '''CREATE TABLE IF NOT EXISTS admin_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    admin_email TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    details TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )''',
+                '''CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )'''
+            ]
+        else:
+            # Postgres
+            tables = [
+                '''CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    email TEXT UNIQUE NOT NULL,
+                    password TEXT NOT NULL,
+                    name TEXT,
+                    phone TEXT,
+                    status TEXT DEFAULT 'Active',
+                    admin_notes TEXT,
+                    verified INTEGER DEFAULT 0,
+                    verification_code TEXT,
+                    code_expiry TIMESTAMP,
+                    last_login TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )''',
+                '''CREATE TABLE IF NOT EXISTS products (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    price INTEGER NOT NULL,
+                    image_base64 TEXT,
+                    category TEXT,
+                    stock INTEGER DEFAULT 10,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )''',
+                '''CREATE TABLE IF NOT EXISTS orders (
+                    id SERIAL PRIMARY KEY,
+                    user_email TEXT NOT NULL,
+                    items TEXT NOT NULL,
+                    total INTEGER NOT NULL,
+                    address TEXT,
+                    phone TEXT,
+                    status TEXT DEFAULT 'Pending',
+                    payment_status TEXT DEFAULT 'Unpaid',
+                    delivery_status TEXT DEFAULT 'Pending',
+                    delivery_method TEXT,
+                    tracking_number TEXT,
+                    estimated_delivery TIMESTAMP,
+                    timeline TEXT,
+                    refunded_amount INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )''',
+                '''CREATE TABLE IF NOT EXISTS reviews (
+                    id SERIAL PRIMARY KEY,
+                    product_id INTEGER,
+                    user_name TEXT,
+                    rating INTEGER,
+                    comment TEXT,
+                    status TEXT DEFAULT 'Pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )''',
+                '''CREATE TABLE IF NOT EXISTS admin_logs (
+                    id SERIAL PRIMARY KEY,
+                    admin_email TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    details TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )''',
+                '''CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )'''
+            ]
 
-    for table in tables:
-        c.execute(table)
-    
-    # Database initialized
-    conn.commit()
-    conn.close()
+        for table in tables:
+            c.execute(table)
+        
+        # Database initialized
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Database initialization failed: {e}")
 
-init_db()
-
-# Database Migration: Add address column to users if missing
 def migrate_db():
     conn = get_db_connection()
     c = conn.cursor()
@@ -216,13 +262,11 @@ def migrate_db():
             # Postgres
             c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT")
         conn.commit()
-        print("Migration: Added address column to users")
-    except Exception as e:
-        # Column might already exist
+    except Exception:
         pass
     conn.close()
 
-migrate_db()
+# The database is initialized in the main block below
 
 def send_email(to_email, subject, body):
     msg = MIMEMultipart()
@@ -269,23 +313,43 @@ def register():
     if not email or not password:
         return jsonify({"error": "Email and password required"}), 400
 
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute(q("SELECT * FROM users WHERE email = ?"), (email,))
-    if c.fetchone():
-        conn.close()
-        return jsonify({"error": "Email already exists"}), 400
-
     hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
     if DATABASE_URL: hashed = hashed.decode('utf-8')
 
     verification_code = ''.join(random.choices(string.digits, k=6))
     code_expiry = (datetime.now() + timedelta(minutes=15)).strftime('%Y-%m-%d %H:%M:%S')
 
-    c.execute(q("INSERT INTO users (email, password, name, verification_code, code_expiry) VALUES (?, ?, ?, ?, ?)"),
-              (email, hashed, name, verification_code, code_expiry))
-    conn.commit()
-    conn.close()
+    # Save to database
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        
+        # Check if email exists
+        c.execute(q("SELECT * FROM users WHERE email = ?"), (email,))
+        if c.fetchone():
+            conn.close()
+            return jsonify({"error": "Email already exists"}), 400
+            
+        c.execute(q("INSERT INTO users (email, password, name, verification_code, code_expiry) VALUES (?, ?, ?, ?, ?)"),
+                  (email, hashed, name, verification_code, code_expiry))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Direct DB Error in register: {e}")
+        # Fallback to REST API
+        print("Attempting REST fallback for register...")
+        user_data = {
+            "email": email,
+            "password": hashed,
+            "name": name,
+            "verification_code": verification_code,
+            "code_expiry": code_expiry,
+            "status": "Active",
+            "verified": 0
+        }
+        rest_res = rest_fallback_request('users', method='POST', data=user_data)
+        if not rest_res:
+            return jsonify({"error": "Could not register user. Database connection failed."}), 500
 
     subject = "Adire Boutique - Verify Your Email"
     body = f"""
@@ -319,19 +383,30 @@ def verify():
     if not email or not code:
         return jsonify({"error": "Email and code required"}), 400
 
-    conn = get_db_connection()
-    c = conn.cursor()
-    # Postgres uses interval for date math usually, but we can pass string for simple check
-    c.execute(q("SELECT * FROM users WHERE email = ? AND verification_code = ? AND code_expiry > CURRENT_TIMESTAMP"), (email, code))
-    user = c.fetchone()
+    user = None
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute(q("SELECT * FROM users WHERE email = ? AND verification_code = ? AND code_expiry > CURRENT_TIMESTAMP"), (email, code))
+        user_row = c.fetchone()
+        if user_row:
+            user = dict(user_row)
+            c.execute(q("UPDATE users SET verified = 1, verification_code = NULL, code_expiry = NULL WHERE email = ?"), (email,))
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        print(f"Direct DB Error in verify: {e}")
+        # REST Fallback
+        print("Attempting REST fallback for verify...")
+        rest_users = rest_fallback_request('users', query_params={'email': f'eq.{email}', 'verification_code': f'eq.{code}'})
+        # Note: can't easily check expiry via REST simple query without complex PostgREST filters
+        if rest_users and len(rest_users) > 0:
+            user = rest_users[0]
+            rest_fallback_request('users', method='PATCH', query_params={'email': f'eq.{email}'}, 
+                                  data={"verified": 1, "verification_code": None, "code_expiry": None})
 
     if not user:
-        conn.close()
         return jsonify({"error": "Invalid or expired code"}), 400
-
-    c.execute(q("UPDATE users SET verified = 1, verification_code = NULL, code_expiry = NULL WHERE email = ?"), (email,))
-    conn.commit()
-    conn.close()
 
     return jsonify({
         "message": "Email verified and logged in!",
@@ -392,11 +467,22 @@ def login():
     email = data.get('email')
     password = data.get('password')
 
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute(q("SELECT * FROM users WHERE email = ?"), (email,))
-    user = c.fetchone()
-    conn.close()
+    user = None
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute(q("SELECT * FROM users WHERE email = ?"), (email,))
+        user_row = c.fetchone()
+        conn.close()
+        if user_row:
+            user = dict(user_row)
+    except Exception as e:
+        print(f"Direct DB Error in login: {e}")
+        # Fallback to REST API
+        print("Attempting REST fallback for login...")
+        rest_users = rest_fallback_request('users', query_params={'email': f'eq.{email}'})
+        if rest_users and len(rest_users) > 0:
+            user = rest_users[0]
 
     if not user:
         return jsonify({"error": "Invalid credentials"}), 401
@@ -598,68 +684,111 @@ def admin_stylize_product(id):
 
 @app.route('/products', methods=['GET'])
 def get_products():
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute(q("SELECT * FROM products"))
-    products = [dict(row) for row in c.fetchall()]
-    conn.close()
+    products = []
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute(q("SELECT * FROM products"))
+        products = [dict(row) for row in c.fetchall()]
+        conn.close()
+    except Exception as e:
+        print(f"Direct DB Error in get_products: {e}")
+        print("Attempting REST fallback for get_products...")
+        rest_products = rest_fallback_request('products')
+        if rest_products:
+            products = rest_products
+            
     return jsonify(products), 200
 
 @app.route('/track/<int:id>', methods=['GET'])
 def track_order(id):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute(q("SELECT id, status, phone, created_at FROM orders WHERE id = ?"), (id,))
-    order = c.fetchone()
-    conn.close()
-    if order:
-        return jsonify(dict(order)), 200
-    return jsonify({"error": "Order not found"}), 404
+    order = None
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute(q("SELECT id, status, tracking_number, estimated_delivery, timeline FROM orders WHERE id = ?"), (id,))
+        row = c.fetchone()
+        if row: order = dict(row)
+        conn.close()
+    except Exception as e:
+        print(f"Direct DB Error in track_order: {e}")
+        rest_orders = rest_fallback_request('orders', query_params={'id': f'eq.{id}', 'select': 'id,status,tracking_number,estimated_delivery,timeline'})
+        if rest_orders: order = rest_orders[0]
+
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+    return jsonify(order), 200
 
 @app.route('/orders/<email>', methods=['GET'])
 def get_user_orders(email):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute(q("SELECT * FROM orders WHERE user_email = ? ORDER BY created_at DESC"), (email,))
-    orders = [dict(row) for row in c.fetchall()]
-    conn.close()
+    orders = []
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute(q("SELECT * FROM orders WHERE user_email = ? ORDER BY created_at DESC"), (email,))
+        orders = [dict(row) for row in c.fetchall()]
+        conn.close()
+    except Exception as e:
+        print(f"Direct DB Error in get_user_orders: {e}")
+        rest_orders = rest_fallback_request('orders', query_params={'user_email': f'eq.{email}', 'order': 'created_at.desc'})
+        if rest_orders: orders = rest_orders
+
     return jsonify(orders), 200
 
 @app.route('/orders', methods=['POST'])
 def create_order():
     data = request.get_json()
-    user_email = data.get('user_email')
+    email = data.get('user_email') # Renamed from user_email to email for consistency with user_id
+    user_id = data.get('user_id')
     items = data.get('items') # JSON string of items
-    total = data.get('total')
-    address = data.get('address')
+    total_amount = data.get('total') # Renamed from total to total_amount
+    address = data.get('address') # Renamed from address to shipping_address
     phone = data.get('phone')
+    payment_method = data.get('payment_method')
 
-    if not user_email or not items or not total:
-        return jsonify({"error": "Order details required"}), 400
+    if not email or not user_id or not items or not total_amount or not address or not phone or not payment_method:
+        return jsonify({"error": "Missing required order details"}), 400
 
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute(q("INSERT INTO orders (user_email, items, total, address, phone) VALUES (?, ?, ?, ?, ?)"),
-              (user_email, items, total, address, phone))
-    conn.commit()
-    conn.close()
+    # Create order
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute(q("INSERT INTO orders (user_email, user_id, items, total_amount, shipping_address, phone, payment_method, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"),
+                  (email, user_id, json.dumps(items), total_amount, address, phone, payment_method, 'Pending'))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Direct DB Error in create_order: {e}")
+        # REST Fallback
+        print("Attempting REST fallback for create_order...")
+        order_data = {
+            "user_email": email,
+            "user_id": user_id,
+            "items": json.dumps(items),
+            "total_amount": total_amount,
+            "shipping_address": address,
+            "phone": phone,
+            "payment_method": payment_method,
+            "status": 'Pending'
+        }
+        rest_fallback_request('orders', method='POST', data=order_data)
 
     # Admin Notification
     try:
-        items = json.loads(items)
-        items_list = "\n".join([f"- {item.get('name')} (x{item.get('quantity')}) - N{item.get('price') * item.get('quantity'):,}" for item in items])
+        items_parsed = json.loads(items)
+        items_list = "\n".join([f"- {item.get('name')} (x{item.get('quantity')}) - N{item.get('price') * item.get('quantity'):,}" for item in items_parsed])
         
-        subject = f"NEW ORDER RECEIVED - N{total:,}"
+        subject = f"NEW ORDER RECEIVED - N{total_amount:,}"
         body = f"""
         Hello Admin,
 
         A new order has been placed on Eury Textiles!
 
         ORDER DETAILS:
-        Customer: {user_email}
+        Customer: {email}
         Phone: {phone}
         Address: {address}
-        Total: N{total:,}
+        Total: N{total_amount:,}
 
         ITEMS:
         {items_list}
@@ -672,26 +801,21 @@ def create_order():
     except Exception as e:
         print(f"Admin notification failed: {str(e)}")
 
-    return jsonify({"message": "Order placed successfully"}), 201
+    return jsonify({"message": "Order created successfully"}), 201
 
-@app.route('/orders/<int:id>/received', methods=['PUT'])
+@app.route('/orders/<int:id>/receive', methods=['POST'])
 def mark_order_received(id):
-    conn = get_db_connection()
-    c = conn.cursor()
-    
-    # Verify order exists
-    c.execute(q("SELECT * FROM orders WHERE id = ?"), (id,))
-    order = c.fetchone()
-    if not order:
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute(q("UPDATE orders SET status = 'Received' WHERE id = ?"), (id,))
+        conn.commit()
         conn.close()
-        return jsonify({"error": "Order not found"}), 404
+    except Exception as e:
+        print(f"Direct DB Error in mark_order_received: {e}")
+        rest_fallback_request('orders', method='PATCH', query_params={'id': f'eq.{id}'}, data={"status": "Received"})
 
-    # Update status to Delivered
-    c.execute(q("UPDATE orders SET status = 'Delivered' WHERE id = ?"), (id,))
-    conn.commit()
-    conn.close()
-
-    return jsonify({"message": "Order marked as received!"}), 200
+    return jsonify({"message": "Order marked as received"}), 200
 
 @app.route('/admin/orders', methods=['GET'])
 def get_all_orders():
@@ -808,17 +932,23 @@ def admin_get_order(id):
     if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
         return jsonify({"error": "Admin access only"}), 403
 
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute(q("SELECT * FROM orders WHERE id = ?"), (id,))
-    order = c.fetchone()
-    conn.close()
-    
+    order = None
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute(q("SELECT * FROM orders WHERE id = ?"), (id,))
+        row = c.fetchone()
+        if row: order = dict(row)
+        conn.close()
+    except Exception as e:
+        print(f"Direct DB Error in admin_get_order: {e}")
+        rest_orders = rest_fallback_request('orders', query_params={'id': f'eq.{id}'})
+        if rest_orders: order = rest_orders[0]
+
     if not order:
         return jsonify({"error": "Order not found"}), 404
         
-    order_dict = dict(order)
-    return jsonify(order_dict), 200
+    return jsonify(order), 200
 
 @app.route('/admin/orders/<int:id>', methods=['PUT'])
 def admin_update_order(id):
@@ -852,58 +982,57 @@ def admin_update_order(id):
         except:
             timeline = []
             
-    updates = []
+    updates = {} # Changed to dictionary for easier REST fallback data construction
     params = []
     
     if status and status != current['status']:
-        updates.append("status = ?")
-        params.append(status)
+        updates['status'] = status
         timeline.append({"date": datetime.now().strftime('%Y-%m-%d %H:%M'), "action": f"Status changed to {status}"})
         
     if payment_status and payment_status != current['payment_status']:
-        updates.append("payment_status = ?")
-        params.append(payment_status)
+        updates['payment_status'] = payment_status
         timeline.append({"date": datetime.now().strftime('%Y-%m-%d %H:%M'), "action": f"Payment marked as {payment_status}"})
         
     if delivery_status and delivery_status != current['delivery_status']:
-        updates.append("delivery_status = ?")
-        params.append(delivery_status)
+        updates['delivery_status'] = delivery_status
         timeline.append({"date": datetime.now().strftime('%Y-%m-%d %H:%M'), "action": f"Delivery updated to {delivery_status}"})
         
     if tracking_number is not None:
-        updates.append("tracking_number = ?")
-        params.append(tracking_number)
+        updates['tracking_number'] = tracking_number
         timeline.append({"date": datetime.now().strftime('%Y-%m-%d %H:%M'), "action": f"Tracking number updated: {tracking_number}"})
         
     if estimated_delivery:
-        updates.append("estimated_delivery = ?")
-        params.append(estimated_delivery)
+        updates['estimated_delivery'] = estimated_delivery
 
     if refund_amount is not None:
         new_refund_total = (current['refunded_amount'] or 0) + int(refund_amount)
-        updates.append("refunded_amount = ?")
-        params.append(new_refund_total)
+        updates['refunded_amount'] = new_refund_total
         timeline.append({"date": datetime.now().strftime('%Y-%m-%d %H:%M'), "action": f"Issued refund of ₦{refund_amount}. Total refunded: ₦{new_refund_total}"})
         if status != 'Refunded': # Auto-update status if fully/partially refunded and not already set
-             updates.append("status = ?")
-             params.append('Refunded')
-        
-    if timeline:
-        import json
-        updates.append("timeline = ?")
-        params.append(json.dumps(timeline))
+             updates['status'] = 'Refunded'
         
     if not updates:
         conn.close()
         return jsonify({"message": "No changes"}), 200
         
-    params.append(id)
-    c.execute(q(f"UPDATE orders SET {', '.join(updates)} WHERE id = ?"), params)
-    conn.commit()
-    
-    log_admin_action(ADMIN_EMAIL, f"Updated order {id}", f"Fields: {', '.join(updates)}")
+    try:
+        up_items = []
+        up_params = []
+        for k, v in updates.items():
+            up_items.append(f"{k} = ?")
+            up_params.append(v)
+            
+        up_params.append(id)
+        c.execute(q(f"UPDATE orders SET {', '.join(up_items)} WHERE id = ?"), up_params)
+        conn.commit()
+    except Exception as e:
+        print(f"Direct DB Error in admin_update_order: {e}")
+        # Fallback to REST API
+        print("Attempting REST fallback for admin_update_order...")
+        rest_fallback_request('orders', method='PATCH', query_params={'id': f'eq.{id}'}, data=updates)
     
     conn.close()
+    log_admin_action(ADMIN_EMAIL, f"Updated order {id}", f"Fields: {list(updates.keys())}")
     return jsonify({"message": "Order updated"}), 200
 
 @app.route('/admin/customers', methods=['GET'])
@@ -915,33 +1044,52 @@ def admin_get_customers():
     search = request.args.get('search', '').strip()
     status = request.args.get('status', '').strip()
 
-    conn = get_db_connection()
-    c = conn.cursor()
-    
-    query = "SELECT id, email, name, phone, status, created_at FROM users"
-    params = []
-    conditions = []
-    
-    if search:
-        if not DATABASE_URL:
-            conditions.append("(name LIKE ? OR email LIKE ? OR phone LIKE ?)")
-        else:
-            conditions.append("(name ILIKE %s OR email ILIKE %s OR phone ILIKE %s)")
-        search_param = f"%{search}%"
-        params.extend([search_param, search_param, search_param])
-    
-    if status:
-        conditions.append("status = ?")
-        params.append(status)
+    users = []
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
         
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
+        query = "SELECT id, email, name, phone, status, created_at FROM users"
+        params = []
+        conditions = []
         
-    query += " ORDER BY created_at DESC"
-    
-    c.execute(q(query) if not DATABASE_URL else query, params)
-    users = [dict(row) for row in c.fetchall()]
-    conn.close()
+        if search:
+            if not DATABASE_URL:
+                conditions.append("(name LIKE ? OR email LIKE ? OR phone LIKE ?)")
+            else:
+                conditions.append("(name ILIKE %s OR email ILIKE %s OR phone ILIKE %s)")
+            search_param = f"%{search}%"
+            params.extend([search_param, search_param, search_param])
+        
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+            
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+            
+        query += " ORDER BY created_at DESC"
+        
+        # Use q() to handle ? translation if needed
+        final_query = q(query)
+        c.execute(final_query, params)
+        users = [dict(row) for row in c.fetchall()]
+        conn.close()
+    except Exception as e:
+        print(f"Direct DB Error in admin_get_customers: {e}")
+        print("Attempting REST fallback for admin_get_customers...")
+        # Simple fallback without complex search for now
+        query_params = {}
+        if status: query_params['status'] = f"eq.{status}"
+        # For search, we combine .or with ilike
+        if search:
+            search_val = f"ilike.*{search}*"
+            query_params['or'] = f"(name.{search_val},email.{search_val},phone.{search_val})"
+        
+        rest_users = rest_fallback_request('users', query_params=query_params)
+        if rest_users:
+            users = rest_users
+
     return jsonify(users), 200
 
 @app.route('/admin/customers/<int:id>', methods=['GET', 'PUT'])
@@ -950,25 +1098,46 @@ def admin_manage_customer(id):
     if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
         return jsonify({"error": "Admin access only"}), 403
 
-    conn = get_db_connection()
-    c = conn.cursor()
+    user = None
+    orders = []
+    stats = {"total_spent": 0, "order_count": 0}
 
     if request.method == 'GET':
-        c.execute(q("SELECT * FROM users WHERE id = ?"), (id,))
-        user = c.fetchone()
-        if not user: return jsonify({"error": "User not found"}), 404
-        # Get order count and total spent
-        c.execute(q("SELECT COUNT(*), SUM(total) FROM orders WHERE user_email = ?"), (user['email'],))
-        stats = c.fetchone()
-        
-        c.execute(q("SELECT id, total, status, created_at FROM orders WHERE user_email = ? ORDER BY created_at DESC"), (user['email'],))
-        orders = [dict(row) for row in c.fetchall()]
-        
+        try:
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.execute(q("SELECT * FROM users WHERE id = ?"), (id,))
+            user_row = c.fetchone()
+            if user_row:
+                user = dict(user_row)
+                # Fetch orders
+                c.execute(q("SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC"), (id,))
+                orders = [dict(row) for row in c.fetchall()]
+                # Fetch stats
+                c.execute(q("SELECT COUNT(*) as count, SUM(total_amount) as spent FROM orders WHERE user_id = ?"), (id,))
+                row = c.fetchone()
+                if row:
+                    stats = {"order_count": row['count'] or 0, "total_spent": row['spent'] or 0}
+            conn.close()
+        except Exception as e:
+            print(f"Direct DB Error in manage_customer (GET): {e}")
+            print("Attempting REST fallback...")
+            rest_users = rest_fallback_request('users', query_params={'id': f'eq.{id}'})
+            if rest_users:
+                user = rest_users[0]
+                # REST orders fallback
+                rest_orders = rest_fallback_request('orders', query_params={'user_id': f'eq.{id}', 'order': 'created_at.desc'})
+                if rest_orders:
+                    orders = rest_orders
+                    stats['order_count'] = len(orders)
+                    stats['total_spent'] = sum([o.get('total_amount', 0) for o in orders])
+
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+            
         user_dict = dict(user)
-        user_dict['order_count'] = stats[0] or 0
-        user_dict['total_spent'] = stats[1] or 0
         user_dict['orders'] = orders
-        conn.close()
+        user_dict['stats'] = stats
         return jsonify(user_dict), 200
 
     # PUT - Update details or status
@@ -976,18 +1145,30 @@ def admin_manage_customer(id):
     status = data.get('status')
     notes = data.get('admin_notes')
     
-    updates = []
-    params = []
-    if status: updates.append("status = ?"); params.append(status)
-    if notes: updates.append("admin_notes = ?"); params.append(notes)
+    updates = {}
+    if status: updates['status'] = status
+    if notes: updates['admin_notes'] = notes
     
     if updates:
-        params.append(id)
-        c.execute(q(f"UPDATE users SET {', '.join(updates)} WHERE id = ?"), params)
-        conn.commit()
-        log_admin_action(ADMIN_EMAIL, f"Updated customer {id}", f"Status: {status}, Notes updated")
+        try:
+            conn = get_db_connection()
+            c = conn.cursor()
+            up_items = []
+            up_params = []
+            for k, v in updates.items():
+                up_items.append(f"{k} = ?")
+                up_params.append(v)
+            up_params.append(id)
+            c.execute(q(f"UPDATE users SET {', '.join(up_items)} WHERE id = ?"), up_params)
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Direct DB Error in manage_customer (PUT): {e}")
+            print("Attempting REST fallback...")
+            rest_fallback_request('users', method='PATCH', query_params={'id': f'eq.{id}'}, data=updates)
+            
+        log_admin_action(ADMIN_EMAIL, f"Updated customer {id}", f"Details: {updates}")
     
-    conn.close()
     return jsonify({"message": "Customer updated"}), 200
 
 @app.route('/admin/reports', methods=['GET'])
@@ -1223,4 +1404,13 @@ def get_report_stats():
     }), 200
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # Initialize database on startup
+    try:
+        init_db()
+        migrate_db()
+        print("Database initialized successfully.")
+    except Exception as e:
+        print(f"Warning: Database initialization skipped: {e}")
+        
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)

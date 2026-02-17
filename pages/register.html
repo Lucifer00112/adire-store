@@ -197,14 +197,9 @@
 
                 await auth.register(name, email, password);
 
-                // Show success message
-                registerForm.innerHTML = `
-                    <div style="text-align: center; padding: 20px;">
-                        <h3 style="color: #4B0082; margin-bottom: 15px;">Registration Successful!</h3>
-                        <p style="color: #666;">Please check your email (${email}) to verify your account before logging in.</p>
-                        <a href="login.html" class="btn-gold" style="display: block; margin-top: 20px; text-decoration: none;">Go to Login</a>
-                    </div>
-                `;
+                // Redirect to verification page
+                window.location.href = `verify.html?email=${encodeURIComponent(email)}`;
+
             } catch (err) {
                 errorBox.innerText = err.message || 'Registration failed';
                 errorBox.style.display = 'block';

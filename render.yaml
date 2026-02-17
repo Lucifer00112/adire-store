@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: adire-backend
+    env: python
+    plan: free
+    buildCommand: pip install -r adire-backend/requirements.txt
+    startCommand: gunicorn --chdir adire-backend app:app
+    envVars:
+      - key: DATABASE_URL
+        fromEnvVar: DATABASE_URL
+      - key: SUPABASE_URL
+        fromEnvVar: SUPABASE_URL
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        fromEnvVar: SUPABASE_SERVICE_ROLE_KEY
+      - key: ADMIN_PASSWORD
+        fromEnvVar: ADMIN_PASSWORD
+      - key: ADMIN_EMAIL
+        fromEnvVar: ADMIN_EMAIL
+      - key: EMAIL_ADDRESS
+        fromEnvVar: EMAIL_ADDRESS
+      - key: EMAIL_PASSWORD
+        fromEnvVar: EMAIL_PASSWORD
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+      - key: EMAIL_PORT
+        value: 587
+      - key: DELIVERY_FEE
+        value: 1500
+      - key: FREE_SHIPPING_THRESHOLD
+        value: 50000

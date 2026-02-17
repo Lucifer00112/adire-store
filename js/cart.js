@@ -23,11 +23,14 @@ const cart = {
     },
 
     addItem(product) {
-        const existingItem = this.items.find(item => item.id === product.id);
+        console.log('Adding product to cart:', product);
+        const existingItem = this.items.find(item => String(item.id) === String(product.id));
         if (existingItem) {
             existingItem.quantity += 1;
+            console.log('Incremented quantity for:', product.name);
         } else {
             this.items.push({ ...product, quantity: 1 });
+            console.log('Added new item:', product.name);
         }
         this.save();
         this.updateUI();

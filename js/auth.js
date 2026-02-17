@@ -3,98 +3,82 @@ const auth = {
     currentUser: null,
 
     async register(name, email, password) {
-        const { data, error } = await window.supabase.auth.signUp({
-            email,
-            password,
-            options: {
-                data: {
-                    full_name: name
-                }
-            }
-        });
-        if (error) throw error;
-        return data;
+        const response = await window.api.post('/register', { name, email, password });
+        return response;
+    },
+
+    async resendVerificationCode(email) {
+        return await window.api.post('/resend-code', { email });
+    },
+
+    async verify(email, code, remember = true) {
+        const response = await window.api.post('/verify', { email, code });
+        if (response.user) {
+            this.saveUser(response.user);
+        }
+        return response;
     },
 
     async login(email, password, remember = true) {
-        const { data, error } = await window.supabase.auth.signInWithPassword({
-            email,
-            password
-        });
-        if (error) throw error;
-
-        // Supabase handles persistence, but we can set a helper for our UI
-        this.currentUser = data.user;
-        if (window.cart) window.cart.init();
-        return { success: true, user: data.user };
+        const response = await window.api.post('/login', { email, password });
+        if (response.user) {
+            // Include password in saved object for simple Bearer auth simulation if needed
+            response.user.password = password;
+            if (remember) {
+                this.saveUser(response.user);
+            } else {
+                this.currentUser = response.user;
+            }
+        }
+        return response;
     },
 
     async logout() {
-        const { error } = await window.supabase.auth.signOut();
-        if (error) throw error;
+        localStorage.removeItem('adire_user');
         this.currentUser = null;
-        if (window.cart) window.cart.init();
         window.location.href = '/index.html';
     },
 
+    saveUser(user) {
+        localStorage.setItem('adire_user', JSON.stringify(user));
+        this.currentUser = user;
+    },
+
     getUser() {
-        // Supabase stores the session in localStorage under a key like 'sb-[project-id]-auth-token'
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
-                const session = JSON.parse(localStorage.getItem(key));
-                return session ? session.user : null;
+        if (this.currentUser) return this.currentUser;
+        const saved = localStorage.getItem('adire_user');
+        if (saved) {
+            try {
+                this.currentUser = JSON.parse(saved);
+                return this.currentUser;
+            } catch (e) {
+                localStorage.removeItem('adire_user');
             }
         }
-        return this.currentUser; // Fallback to memory if session not found yet
+        return null;
     },
 
     async getUserProfile() {
         const user = this.getUser();
         if (!user) return null;
-        const { data, error } = await window.supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
-        if (error) throw error;
-        return data;
+        // The backend returns profile info in the login/profile endpoints
+        return await window.api.get(`/user/profile?email=${user.email}`);
     },
 
     async updateProfile(data) {
         const user = this.getUser();
         if (!user) throw new Error('Not logged in');
-        const { error } = await window.supabase
-            .from('profiles')
-            .update(data)
-            .eq('id', user.id);
-        if (error) throw error;
-        return { success: true };
+        return await window.api.put(`/user/profile?email=${user.email}`, data);
     },
 
-    async changePassword(newPassword) {
-        const { error } = await window.supabase.auth.updateUser({
-            password: newPassword
+    async changePassword(oldPassword, newPassword) {
+        const user = this.getUser();
+        if (!user) throw new Error('Not logged in');
+        return await window.api.post('/user/change-password', {
+            email: user.email,
+            old_password: oldPassword,
+            new_password: newPassword
         });
-        if (error) throw error;
-        return { success: true };
-    },
-
-    async resetPassword(email) {
-        // Construct the redirect URL for the reset password page
-        // Since we moved to the root, the path should be relative to the site origin
-        const resetUrl = `${window.location.origin}/pages/reset-password.html`;
-
-        // Handle local testing vs production URL
-        const finalUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-            ? resetUrl
-            : `${window.location.origin}/pages/reset-password.html`;
-
-        const { error } = await window.supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: resetUrl,
-        });
-        if (error) throw error;
-        return { success: true };
     },
 
     isLoggedIn() {
@@ -103,3 +87,4 @@ const auth = {
 };
 
 window.auth = auth;
+

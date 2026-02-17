@@ -186,7 +186,22 @@
                     window.location.href = 'user-dashboard.html';
                 }
             } catch (err) {
-                errorBox.innerText = err.message || 'Login failed';
+                if (err.message === 'Email not verified') {
+                    errorBox.innerHTML = `Email not verified. <a href="#" id="verify-now-link" style="color: #4B0082; text-decoration: underline; font-weight: bold;">Verify Now</a>`;
+                    document.getElementById('verify-now-link').onclick = async (e) => {
+                        e.preventDefault();
+                        const link = e.target;
+                        link.innerText = 'Resending...';
+                        try {
+                            await auth.resendVerificationCode(email);
+                            window.location.href = `verify.html?email=${encodeURIComponent(email)}`;
+                        } catch (resendErr) {
+                            errorBox.innerText = resendErr.message;
+                        }
+                    };
+                } else {
+                    errorBox.innerText = err.message || 'Login failed';
+                }
                 errorBox.style.display = 'block';
                 btn.innerText = 'Sign In';
                 btn.disabled = false;

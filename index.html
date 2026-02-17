@@ -384,18 +384,12 @@
 
             // Fetch products
             try {
-                const products = await api.get('/products');
                 const list = document.getElementById('product-list');
-                document.getElementById('loading').style.display = 'none';
-
-                if (products.length === 0) {
-                    list.innerHTML = '<p class="text-center" style="grid-column: 1/-1; color: #666;">Fresh collection arriving soon! Check back later.</p>';
-                    return;
-                }
 
                 // Check if user is logged in
                 const currentUser = auth.getUser();
                 if (!currentUser) {
+                    document.getElementById('loading').style.display = 'none';
                     list.innerHTML = `
                         <div style="grid-column: 1/-1; text-align: center; padding: 60px; background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); margin: 20px;">
                             <div style="font-size: 48px; margin-bottom: 20px;">🔒</div>
@@ -409,6 +403,15 @@
                     `;
                     return;
                 }
+
+                const products = await api.get('/products');
+                document.getElementById('loading').style.display = 'none';
+
+                if (products.length === 0) {
+                    list.innerHTML = '<p class="text-center" style="grid-column: 1/-1; color: #666;">Fresh collection arriving soon! Check back later.</p>';
+                    return;
+                }
+
 
                 products.forEach(p => {
                     const card = document.createElement('div');

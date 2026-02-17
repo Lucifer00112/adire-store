@@ -2,7 +2,7 @@ const api = {
     // Replace with your Render URL once deployment is complete
     baseUrl: window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
         ? 'http://127.0.0.1:5000'
-        : 'https://adire-backend.onrender.com', // Placeholder URL
+        : 'https://adire-store.onrender.com',
 
     async request(endpoint, options = {}) {
         const url = `${this.baseUrl}${endpoint}`;

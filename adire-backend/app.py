@@ -265,10 +265,19 @@ def migrate_db():
             except: pass
             try: c.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
             except: pass
+            try: c.execute("ALTER TABLE users ADD COLUMN verified INTEGER DEFAULT 0")
+            except: pass
+            try: c.execute("ALTER TABLE users ADD COLUMN verification_code TEXT")
+            except: pass
+            try: c.execute("ALTER TABLE users ADD COLUMN code_expiry DATETIME")
+            except: pass
         else:
             # Postgres
             c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT")
             c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verified INTEGER DEFAULT 0")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_code TEXT")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS code_expiry TIMESTAMP")
         
         # Ensure ADMIN_EMAIL has admin role
         if ADMIN_EMAIL:
@@ -344,8 +353,8 @@ def register():
             conn.close()
             return jsonify({"error": "Email already exists"}), 400
             
-        c.execute(q("INSERT INTO users (email, password, name, verification_code, code_expiry) VALUES (?, ?, ?, ?, ?)"),
-                  (email, hashed, name, verification_code, code_expiry))
+        c.execute(q("INSERT INTO users (email, password, name, verification_code, code_expiry, verified) VALUES (?, ?, ?, ?, ?, ?)"),
+                  (email, hashed, name, verification_code, code_expiry, 0))
         conn.commit()
         conn.close()
     except Exception as e:
@@ -514,7 +523,7 @@ def login():
     if not bcrypt.checkpw(password.encode('utf-8'), stored_password):
         return jsonify({"error": "Invalid credentials"}), 401
 
-    if user['verified'] == 0:
+    if user.get('verified', 1) == 0:
         return jsonify({"error": "Email not verified"}), 403
 
     return jsonify({

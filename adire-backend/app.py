@@ -561,12 +561,24 @@ def user_profile():
     c = conn.cursor()
 
     if request.method == 'GET':
-        c.execute(q("SELECT name, email, phone, address, role FROM users WHERE email = ?"), (email,))
-        user = c.fetchone()
-        conn.close()
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-        return jsonify(dict(user)), 200
+        try:
+            c.execute(q("SELECT name, email, phone, address, role FROM users WHERE email = ?"), (email,))
+            user = c.fetchone()
+            conn.close()
+            if not user:
+                return jsonify({"error": "User not found"}), 404
+            return jsonify(dict(user)), 200
+        except Exception as e:
+            # Fallback for missing role column in local/direct DB
+            print(f"SQL Role Fetch Error (likely missing column): {e}")
+            c.execute(q("SELECT name, email, phone, address FROM users WHERE email = ?"), (email,))
+            user = c.fetchone()
+            conn.close()
+            if not user:
+                return jsonify({"error": "User not found"}), 404
+            data = dict(user)
+            data['role'] = 'user'
+            return jsonify(data), 200
 
     if request.method == 'PUT':
         data = request.get_json()

@@ -352,15 +352,7 @@ def register():
         print(f"Direct DB Error in register: {e}")
         # Fallback to REST API
         print("Attempting REST fallback for register...")
-        user_data = {
-            "email": email,
-            "password": hashed,
-            "name": name,
-            "verification_code": verification_code,
-            "code_expiry": code_expiry,
-            "status": "Active",
-            "verified": 0
-        }
+        # Try to register via REST
         rest_res = rest_fallback_request('users', method='POST', data={
             "email": email,
             "password": hashed,
@@ -369,9 +361,14 @@ def register():
             "code_expiry": code_expiry,
             "status": "Active",
             "verified": 0
-            # role removed for initial resilience until schema is updated via dashboard
         })
+        
         if not rest_res:
+            # Check if it failed because of conflict (409) or actual connection failure
+            # We check the 409 by trying to fetch the user
+            existing = rest_fallback_request('users', query_params={'email': f'eq.{email}'})
+            if existing and len(existing) > 0:
+                return jsonify({"error": "Email already exists"}), 400
             return jsonify({"error": "Could not register user. Database connection failed."}), 500
 
     subject = "Adire Boutique - Verify Your Email"
@@ -524,9 +521,9 @@ def login():
         "message": "Login successful",
         "user": {
             "email": email,
-            "name": user['name'],
-            "phone": user['phone'],
-            "address": user['address'],
+            "name": user.get('name'),
+            "phone": user.get('phone'),
+            "address": user.get('address'),
             "role": user.get('role', 'user')
         }
     }), 200
@@ -540,17 +537,21 @@ def user_profile():
     conn = get_db_connection()
     if not conn:
         if request.method == 'GET':
-            # Request role, but be prepared for it to be missing if schema hasn't updated
-            user_list = rest_fallback_request('users', method='GET', query_params={'email': f'eq.{email}', 'select': 'name,email,phone,address,role'})
+            # Defensive: Get all columns and handle missing fields in Python
+            user_list = rest_fallback_request('users', method='GET', query_params={'email': f'eq.{email}'})
             if not user_list:
-                # Try without role as a fallback
-                user_list = rest_fallback_request('users', method='GET', query_params={'email': f'eq.{email}', 'select': 'name,email,phone,address'})
-                if not user_list:
-                    return jsonify({"error": "User not found"}), 404
+                return jsonify({"error": "User not found"}), 404
             
             user_data = user_list[0]
-            if 'role' not in user_data: user_data['role'] = 'user'
-            return jsonify(user_data), 200
+            # Ensure required fields exist in response
+            resolved_data = {
+                "name": user_data.get('name'),
+                "email": user_data.get('email'),
+                "phone": user_data.get('phone'),
+                "address": user_data.get('address'),
+                "role": user_data.get('role', 'user')
+            }
+            return jsonify(resolved_data), 200
         if request.method == 'PUT':
             data = request.get_json()
             updated = rest_fallback_request('users', method='PATCH', query_params={'email': f'eq.{email}'}, data=data)
@@ -794,7 +795,7 @@ def track_order(id):
         conn.close()
     except Exception as e:
         print(f"Direct DB Error in track_order: {e}")
-        rest_orders = rest_fallback_request('orders', query_params={'id': f'eq.{id}', 'select': 'id,status,tracking_number,estimated_delivery,timeline'})
+        rest_orders = rest_fallback_request('orders', query_params={'id': f'eq.{id}'})
         if rest_orders: order = rest_orders[0]
 
     if not order:
@@ -1350,7 +1351,7 @@ def admin_get_reports():
         print(f"Direct DB Error in admin_get_reports: {e}")
         # REST fallback for reports is simplified
         orders = rest_fallback_request('orders', query_params={'status': 'neq.Cancelled'})
-        users = rest_fallback_request('users', query_params={'select': 'id'})
+        users = rest_fallback_request('users')
         total_customers = len(users) if users else 0
         total_orders = len(orders) if orders else 0
         aov = sum([o.get('total', 0) for o in (orders or [])]) / total_orders if total_orders > 0 else 0
@@ -1521,8 +1522,8 @@ def get_report_stats():
     except Exception as e:
         print(f"Stats error: {e}")
         # REST fallback for stats
-        orders = rest_fallback_request('orders', query_params={'status': 'neq.Cancelled', 'select': 'total,refunded_amount'})
-        products = rest_fallback_request('products', query_params={'select': 'id'})
+        orders = rest_fallback_request('orders', query_params={'status': 'neq.Cancelled'})
+        products = rest_fallback_request('products')
         
         revenue = sum([(o.get('total', 0) - (o.get('refunded_amount') or 0)) for o in (orders or [])])
         stats = {

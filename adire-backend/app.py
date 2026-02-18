@@ -393,18 +393,33 @@ def register():
     # Save to database
     try:
         conn = get_db_connection()
-        c = conn.cursor()
-        
-        # Check if email exists
-        c.execute(q("SELECT * FROM users WHERE email = ?"), (email,))
-        if c.fetchone():
-            conn.close()
-            return jsonify({"error": "Email already exists"}), 400
+        if not conn:
+            # Attempt REST fallback for registration
+            print("Attempting REST fallback for registration...")
+            # Check if email exists
+            user_list = rest_fallback_request('users', query_params={'email': f"eq.{email}"})
+            if user_list and len(user_list) > 0:
+                return jsonify({"error": "Email already exists"}), 400
             
-        c.execute(q("INSERT INTO users (email, password, name, verification_code, code_expiry, verified) VALUES (?, ?, ?, ?, ?, ?)"),
-                  (email, hashed, name, verification_code, code_expiry, 0))
-        conn.commit()
-        conn.close()
+            # Insert via REST
+            res = rest_fallback_request('users', method='POST', data={
+                'email': email, 'password': hashed, 'name': name,
+                'verification_code': verification_code, 'code_expiry': code_expiry, 'verified': 0
+            })
+            if res is None:
+                return jsonify({"error": "Registration failed (REST Fallback)"}), 500
+        else:
+            c = conn.cursor()
+            # Check if email exists
+            c.execute(q("SELECT * FROM users WHERE email = ?"), (email,))
+            if c.fetchone():
+                conn.close()
+                return jsonify({"error": "Email already exists"}), 400
+                
+            c.execute(q("INSERT INTO users (email, password, name, verification_code, code_expiry, verified) VALUES (?, ?, ?, ?, ?, ?)"),
+                      (email, hashed, name, verification_code, code_expiry, 0))
+            conn.commit()
+            conn.close()
     except Exception as e:
         print(f"Registration Error: {e}")
         return jsonify({"error": "Registration failed", "details": str(e)}), 500

@@ -509,11 +509,24 @@ def login():
 
 @app.route('/user/profile', methods=['GET', 'PUT'])
 def user_profile():
-    email = request.args.get('email') # Simplified for now, usually would be from JWT
+    email = request.args.get('email') 
     if not email:
         return jsonify({"error": "Email required"}), 400
 
     conn = get_db_connection()
+    if not conn:
+        if request.method == 'GET':
+            user_list = rest_fallback_request('users', method='GET', query_params={'email': f'eq.{email}', 'select': 'name,email,phone,address'})
+            if not user_list:
+                return jsonify({"error": "User not found"}), 404
+            return jsonify(user_list[0]), 200
+        if request.method == 'PUT':
+            data = request.get_json()
+            updated = rest_fallback_request('users', method='PATCH', query_params={'email': f'eq.{email}'}, data=data)
+            if updated is None:
+                return jsonify({"error": "Update failed"}), 500
+            return jsonify({"message": "Profile updated successfully"}), 200
+
     c = conn.cursor()
 
     if request.method == 'GET':
@@ -546,6 +559,23 @@ def change_password():
         return jsonify({"error": "Missing fields"}), 400
 
     conn = get_db_connection()
+    if not conn:
+        # Fetch user via REST first to verify old password
+        user_list = rest_fallback_request('users', query_params={'email': f'eq.{email}'})
+        if not user_list: return jsonify({"error": "User not found"}), 404
+        user = user_list[0]
+        stored_password = user['password']
+        if isinstance(stored_password, str): stored_password = stored_password.encode('utf-8')
+        if not bcrypt.checkpw(old_password.encode('utf-8'), stored_password):
+            return jsonify({"error": "Incorrect password"}), 401
+        
+        # Update password via REST
+        hashed = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+        if DATABASE_URL: hashed = hashed.decode('utf-8')
+        updated = rest_fallback_request('users', method='PATCH', query_params={'email': f'eq.{email}'}, data={'password': hashed})
+        if updated is None: return jsonify({"error": "Failed to update profile via REST"}), 500
+        return jsonify({"message": "Password changed successfully"}), 200
+
     c = conn.cursor()
     c.execute(q("SELECT password FROM users WHERE email = ?"), (email,))
     user = c.fetchone()
@@ -559,7 +589,7 @@ def change_password():
 
     if not bcrypt.checkpw(old_password.encode('utf-8'), stored_password):
         conn.close()
-        return jsonify({"error": "Incorrect biological password"}), 401
+        return jsonify({"error": "Incorrect password"}), 401
 
     hashed = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
     if DATABASE_URL: hashed = hashed.decode('utf-8')
@@ -591,7 +621,7 @@ def admin_add_product():
     description = data.get('description')
     price = data.get('price')
     image_base64 = data.get('image_base64')
-    gallery = data.get('gallery', '[]') # New gallery field
+    gallery = data.get('gallery', '[]')
     category = data.get('category')
     stock = data.get('stock', 10)
 
@@ -603,6 +633,15 @@ def admin_add_product():
         return jsonify({"error": "Name and price required"}), 400
 
     conn = get_db_connection()
+    if not conn:
+        res = rest_fallback_request('products', method='POST', data={
+            'name': name, 'description': description, 'price': price,
+            'image_base64': image_base64, 'gallery': gallery,
+            'category': category, 'stock': stock
+        })
+        if res is None: return jsonify({"error": "Failed to add product"}), 500
+        return jsonify({"message": "Product added successfully"}), 201
+
     c = conn.cursor()
     c.execute(q("INSERT INTO products (name, description, price, image_base64, gallery, category, stock) VALUES (?, ?, ?, ?, ?, ?, ?)"),
               (name, description, price, image_base64, gallery, category, stock))
@@ -829,47 +868,64 @@ def get_all_orders():
     limit = int(request.args.get('limit', 20))
     offset = (page - 1) * limit
 
-    conn = get_db_connection()
-    c = conn.cursor()
+    orders = []
+    total = 0
     
-    query = "SELECT * FROM orders"
-    params = []
-    conditions = []
-    
-    if search:
-        if not DATABASE_URL:
-            conditions.append("(id LIKE ? OR user_email LIKE ?)")
-        else:
-            conditions.append("(CAST(id AS TEXT) LIKE %s OR user_email ILIKE %s)")
-        search_param = f"%{search}%"
-        params.extend([search_param, search_param])
-    
-    if status:
-        conditions.append("status = ?")
-        params.append(status)
+    try:
+        conn = get_db_connection()
+        if not conn: raise Exception("Conn failed")
+        c = conn.cursor()
         
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
+        query = "SELECT * FROM orders"
+        params = []
+        conditions = []
         
-    query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
-    params.extend([limit, offset])
-    
-    c.execute(q(query) if not DATABASE_URL else query, params)
-    orders = [dict(row) for row in c.fetchall()]
-    
-    # Get total count for pagination
-    count_query = "SELECT COUNT(*) FROM orders"
-    if conditions:
-        count_query += " WHERE " + " AND ".join(conditions)
-    c.execute(q(count_query) if not DATABASE_URL else count_query, params[:-2])
-    total = c.fetchone()[0]
-    
-    conn.close()
+        if search:
+            if not DATABASE_URL:
+                conditions.append("(id LIKE ? OR user_email LIKE ?)")
+            else:
+                conditions.append("(CAST(id AS TEXT) LIKE %s OR user_email ILIKE %s)")
+            search_param = f"%{search}%"
+            params.extend([search_param, search_param])
+        
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+            
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+            
+        query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        
+        c.execute(q(query) if not DATABASE_URL else query, params)
+        orders = [dict(row) for row in c.fetchall()]
+        
+        count_query = "SELECT COUNT(*) FROM orders"
+        if conditions:
+            count_query += " WHERE " + " AND ".join(conditions)
+        c.execute(q(count_query) if not DATABASE_URL else count_query, params[:-2])
+        total = c.fetchone()[0]
+        conn.close()
+    except Exception as e:
+        print(f"Direct DB Error in get_all_orders: {e}")
+        # Simplified REST fallback
+        query_params = {'order': 'created_at.desc', 'limit': limit, 'offset': offset}
+        if status: query_params['status'] = f'eq.{status}'
+        if search: 
+             search_val = f'ilike.*{search}*'
+             query_params['or'] = f'(user_email.{search_val})'
+        
+        rest_orders = rest_fallback_request('orders', query_params=query_params)
+        if rest_orders:
+            orders = rest_orders
+            total = len(orders) # Approximated
+
     return jsonify({
         "orders": orders,
         "total": total,
         "page": page,
-        "pages": (total + limit - 1) // limit
+        "pages": (total + limit - 1) // limit if total > 0 else 1
     }), 200
 
 @app.route('/admin/products/<int:id>', methods=['PUT'])
@@ -964,27 +1020,33 @@ def admin_update_order(id):
     estimated_delivery = data.get('estimated_delivery')
     refund_amount = data.get('refund_amount')
 
-    conn = get_db_connection()
-    c = conn.cursor()
+    updates = {}
+    current = None
     
-    # Get current order state for timeline
-    c.execute(q("SELECT timeline, status, payment_status, delivery_status, refunded_amount FROM orders WHERE id = ?"), (id,))
-    current = c.fetchone()
-    if not current:
+    try:
+        conn = get_db_connection()
+        if not conn: raise Exception("Conn failed")
+        c = conn.cursor()
+        c.execute(q("SELECT timeline, status, payment_status, delivery_status, refunded_amount FROM orders WHERE id = ?"), (id,))
+        row = c.fetchone()
+        if row: current = dict(row)
         conn.close()
+    except Exception as e:
+        print(f"Check current order error: {e}")
+        rest_curr = rest_fallback_request('orders', query_params={'id': f'eq.{id}'})
+        if rest_curr: current = rest_curr[0]
+
+    if not current:
         return jsonify({"error": "Order not found"}), 404
     
     timeline = []
-    if current['timeline']:
+    if current.get('timeline'):
         import json
         try:
             timeline = json.loads(current['timeline'])
         except:
             timeline = []
             
-    updates = {} # Changed to dictionary for easier REST fallback data construction
-    params = []
-    
     if status and status != current['status']:
         updates['status'] = status
         timeline.append({"date": datetime.now().strftime('%Y-%m-%d %H:%M'), "action": f"Status changed to {status}"})
@@ -1012,10 +1074,15 @@ def admin_update_order(id):
              updates['status'] = 'Refunded'
         
     if not updates:
-        conn.close()
         return jsonify({"message": "No changes"}), 200
-        
+
+    import json
+    updates['timeline'] = json.dumps(timeline)
+
     try:
+        conn = get_db_connection()
+        if not conn: raise Exception("Conn failed")
+        c = conn.cursor()
         up_items = []
         up_params = []
         for k, v in updates.items():
@@ -1025,13 +1092,11 @@ def admin_update_order(id):
         up_params.append(id)
         c.execute(q(f"UPDATE orders SET {', '.join(up_items)} WHERE id = ?"), up_params)
         conn.commit()
+        conn.close()
     except Exception as e:
         print(f"Direct DB Error in admin_update_order: {e}")
-        # Fallback to REST API
-        print("Attempting REST fallback for admin_update_order...")
         rest_fallback_request('orders', method='PATCH', query_params={'id': f'eq.{id}'}, data=updates)
     
-    conn.close()
     log_admin_action(ADMIN_EMAIL, f"Updated order {id}", f"Fields: {list(updates.keys())}")
     return jsonify({"message": "Order updated"}), 200
 
@@ -1177,58 +1242,76 @@ def admin_get_reports():
     if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
         return jsonify({"error": "Admin access only"}), 403
 
-    conn = get_db_connection()
-    c = conn.cursor()
-    
-    # 1. Revenue Trends (Monthly)
-    if not DATABASE_URL:
-        c.execute("SELECT strftime('%Y-%m', created_at) as period, SUM(total - refunded_amount) as revenue, COUNT(*) as orders FROM orders WHERE status != 'Cancelled' GROUP BY period ORDER BY period DESC LIMIT 12")
-    else:
-        c.execute("SELECT to_char(created_at, 'YYYY-MM') as period, SUM(total - refunded_amount) as revenue, COUNT(*) as orders FROM orders WHERE status != 'Cancelled' GROUP BY period ORDER BY period DESC LIMIT 12")
-    revenue_trends = [dict(row) for row in c.fetchall()]
-    
-    # 2. Daily Sales (Last 30 days)
-    if not DATABASE_URL:
-        c.execute("SELECT strftime('%Y-%m-%d', created_at) as period, SUM(total - refunded_amount) as revenue FROM orders WHERE status != 'Cancelled' AND created_at > date('now', '-30 days') GROUP BY period ORDER BY period ASC")
-    else:
-        c.execute("SELECT to_char(created_at, 'YYYY-MM-DD') as period, SUM(total - refunded_amount) as revenue FROM orders WHERE status != 'Cancelled' AND created_at > CURRENT_DATE - INTERVAL '30 days' GROUP BY period ORDER BY period ASC")
-    daily_sales = [dict(row) for row in c.fetchall()]
+    revenue_trends = []
+    daily_sales = []
+    best_sellers = []
+    total_customers = 0
+    new_cust = 0
+    returning = 0
+    aov = 0
+    delivery_rate = 0
 
-    # 3. Best sellers
-    c.execute(q("SELECT items FROM orders WHERE status != 'Cancelled'"))
-    import json
-    product_stats = {}
-    for row in c.fetchall():
-        try:
-            items = json.loads(row['items'])
-            for item in items:
-                name = item.get('name')
-                product_stats[name] = product_stats.get(name, 0) + item.get('quantity', 1)
-        except: continue
-    best_sellers = sorted(product_stats.items(), key=lambda x: x[1], reverse=True)[:10]
+    try:
+        conn = get_db_connection()
+        if not conn: raise Exception("Conn failed")
+        c = conn.cursor()
+        
+        # 1. Revenue Trends (Monthly)
+        if not DATABASE_URL:
+            c.execute("SELECT strftime('%Y-%m', created_at) as period, SUM(total - refunded_amount) as revenue, COUNT(*) as orders FROM orders WHERE status != 'Cancelled' GROUP BY period ORDER BY period DESC LIMIT 12")
+        else:
+            c.execute("SELECT to_char(created_at, 'YYYY-MM') as period, SUM(total - refunded_amount) as revenue, COUNT(*) as orders FROM orders WHERE status != 'Cancelled' GROUP BY period ORDER BY period DESC LIMIT 12")
+        revenue_trends = [dict(row) for row in c.fetchall()]
+        
+        # 2. Daily Sales (Last 30 days)
+        if not DATABASE_URL:
+            c.execute("SELECT strftime('%Y-%m-%d', created_at) as period, SUM(total - refunded_amount) as revenue FROM orders WHERE status != 'Cancelled' AND created_at > date('now', '-30 days') GROUP BY period ORDER BY period ASC")
+        else:
+            c.execute("SELECT to_char(created_at, 'YYYY-MM-DD') as period, SUM(total - refunded_amount) as revenue FROM orders WHERE status != 'Cancelled' AND created_at > CURRENT_DATE - INTERVAL '30 days' GROUP BY period ORDER BY period ASC")
+        daily_sales = [dict(row) for row in c.fetchall()]
 
-    # 4. Customer Analytics
-    c.execute(q("SELECT COUNT(*) FROM users"))
-    total_customers = c.fetchone()[0]
-    
-    # New vs Returning (Simulated by order count)
-    c.execute(q("SELECT user_email, COUNT(*) as cnt FROM orders GROUP BY user_email"))
-    customer_orders = c.fetchall()
-    returning = len([x for x in customer_orders if x['cnt'] > 1])
-    new_cust = len([x for x in customer_orders if x['cnt'] == 1])
+        # 3. Best sellers
+        c.execute(q("SELECT items FROM orders WHERE status != 'Cancelled'"))
+        import json
+        product_stats = {}
+        for row in c.fetchall():
+            try:
+                items = json.loads(row['items'])
+                for item in items:
+                    name = item.get('name')
+                    product_stats[name] = product_stats.get(name, 0) + item.get('quantity', 1)
+            except: continue
+        best_sellers = sorted(product_stats.items(), key=lambda x: x[1], reverse=True)[:10]
 
-    # 5. Average Order Value
-    c.execute(q("SELECT AVG(total) FROM orders WHERE status != 'Cancelled'"))
-    aov = c.fetchone()[0] or 0
+        # 4. Customer Analytics
+        c.execute(q("SELECT COUNT(*) FROM users"))
+        total_customers = c.fetchone()[0]
+        
+        c.execute(q("SELECT user_email, COUNT(*) as cnt FROM orders GROUP BY user_email"))
+        customer_orders = c.fetchall()
+        returning = len([x for x in customer_orders if x['cnt'] > 1])
+        new_cust = len([x for x in customer_orders if x['cnt'] == 1])
 
-    # 6. Delivery Success Rate
-    c.execute(q("SELECT COUNT(*) FROM orders WHERE delivery_status = 'Delivered'"))
-    delivered = c.fetchone()[0]
-    c.execute(q("SELECT COUNT(*) FROM orders"))
-    total_orders = c.fetchone()[0]
-    delivery_rate = (delivered / total_orders * 100) if total_orders > 0 else 0
+        # 5. Average Order Value
+        c.execute(q("SELECT AVG(total) FROM orders WHERE status != 'Cancelled'"))
+        aov = c.fetchone()[0] or 0
 
-    conn.close()
+        # 6. Delivery Success Rate
+        c.execute(q("SELECT COUNT(*) FROM orders WHERE delivery_status = 'Delivered'"))
+        delivered = c.fetchone()[0]
+        c.execute(q("SELECT COUNT(*) FROM orders"))
+        total_orders = c.fetchone()[0]
+        delivery_rate = (delivered / total_orders * 100) if total_orders > 0 else 0
+        conn.close()
+    except Exception as e:
+        print(f"Direct DB Error in admin_get_reports: {e}")
+        # REST fallback for reports is simplified
+        orders = rest_fallback_request('orders', query_params={'status': 'neq.Cancelled'})
+        users = rest_fallback_request('users', query_params={'select': 'id'})
+        total_customers = len(users) if users else 0
+        total_orders = len(orders) if orders else 0
+        aov = sum([o.get('total', 0) for o in (orders or [])]) / total_orders if total_orders > 0 else 0
+
     return jsonify({
         "revenue_trends": revenue_trends,
         "daily_sales": daily_sales,
@@ -1369,39 +1452,43 @@ def manage_review(id):
     return jsonify({"message": msg}), 200
 
 # --- Reports Route (Basic) ---
-@app.route('/admin/reports/stats', methods=['GET'])
+@app.route('/admin/report-stats', methods=['GET'])
 def get_report_stats():
     auth_header = request.headers.get('Authorization')
     if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
         return jsonify({"error": "Admin access only"}), 403
+
+    stats = {}
+    try:
+        conn = get_db_connection()
+        if not conn: raise Exception("Conn failed")
+        c = conn.cursor()
         
-    conn = get_db_connection()
-    c = conn.cursor()
-    
-    # Total Revenue
-    c.execute(q("SELECT SUM(total) FROM orders WHERE status != 'Cancelled'"))
-    total_revenue = c.fetchone()
-    total_revenue = total_revenue[0] if total_revenue else 0
-    if total_revenue is None: total_revenue = 0
-    
-    # Orders Count
-    c.execute(q("SELECT COUNT(*) FROM orders"))
-    # Fetch result carefully for Postgres/SQLite
-    row = c.fetchone()
-    total_orders = row[0] if row else 0
-    
-    # Products Count
-    c.execute(q("SELECT COUNT(*) FROM products"))
-    row = c.fetchone()
-    total_products = row[0] if row else 0
-    
-    conn.close()
-    
-    return jsonify({
-        "revenue": total_revenue,
-        "orders": total_orders,
-        "products": total_products
-    }), 200
+        c.execute(q("SELECT SUM(total - refunded_amount) FROM orders WHERE status != 'Cancelled'"))
+        total_revenue = c.fetchone()[0] or 0
+        
+        c.execute(q("SELECT COUNT(*) FROM orders"))
+        total_orders = c.fetchone()[0]
+        
+        c.execute(q("SELECT COUNT(*) FROM products"))
+        total_products = c.fetchone()[0]
+        
+        stats = {"revenue": total_revenue, "orders": total_orders, "products": total_products}
+        conn.close()
+    except Exception as e:
+        print(f"Stats error: {e}")
+        # REST fallback for stats
+        orders = rest_fallback_request('orders', query_params={'status': 'neq.Cancelled', 'select': 'total,refunded_amount'})
+        products = rest_fallback_request('products', query_params={'select': 'id'})
+        
+        revenue = sum([(o.get('total', 0) - (o.get('refunded_amount') or 0)) for o in (orders or [])])
+        stats = {
+            "revenue": revenue,
+            "orders": len(orders) if orders else 0,
+            "products": len(products) if products else 0
+        }
+
+    return jsonify(stats), 200
 
 if __name__ == '__main__':
     # Initialize database on startup

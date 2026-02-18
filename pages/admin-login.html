@@ -78,9 +78,10 @@
 
                 // 1. Authenticate with Supabase
                 const res = await auth.login(email, password);
+                if (res.error) throw new Error(res.error);
 
                 // 2. Fetch profile to check role
-                const profile = await api.get('/user/profile');
+                const profile = await api.get(`/user/profile?email=${res.user.email}`);
 
                 if (profile && profile.role === 'admin') {
                     // Success: Redirect to dashboard

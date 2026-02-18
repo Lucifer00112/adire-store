@@ -119,6 +119,7 @@ def init_db():
                     phone TEXT,
                     status TEXT DEFAULT 'Active',
                     admin_notes TEXT,
+                    role TEXT DEFAULT 'user',
                     verified INTEGER DEFAULT 0,
                     verification_code TEXT,
                     code_expiry DATETIME,
@@ -186,6 +187,7 @@ def init_db():
                     phone TEXT,
                     status TEXT DEFAULT 'Active',
                     admin_notes TEXT,
+                    role TEXT DEFAULT 'user',
                     verified INTEGER DEFAULT 0,
                     verification_code TEXT,
                     code_expiry TIMESTAMP,
@@ -198,6 +200,7 @@ def init_db():
                     description TEXT,
                     price INTEGER NOT NULL,
                     image_base64 TEXT,
+                    gallery TEXT,
                     category TEXT,
                     stock INTEGER DEFAULT 10,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -253,17 +256,28 @@ def init_db():
 
 def migrate_db():
     conn = get_db_connection()
+    if not conn: return
     c = conn.cursor()
     try:
         if not DATABASE_URL:
             # SQLite
-            c.execute("ALTER TABLE users ADD COLUMN address TEXT")
+            try: c.execute("ALTER TABLE users ADD COLUMN address TEXT")
+            except: pass
+            try: c.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
+            except: pass
         else:
             # Postgres
             c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'")
+        
+        # Ensure ADMIN_EMAIL has admin role
+        if ADMIN_EMAIL:
+            print(f"Ensuring {ADMIN_EMAIL} has admin role...")
+            c.execute(q("UPDATE users SET role = 'admin' WHERE email = ?"), (ADMIN_EMAIL.lower(),))
+            
         conn.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Migration error: {e}")
     conn.close()
 
 # The database is initialized in the main block below
@@ -347,7 +361,16 @@ def register():
             "status": "Active",
             "verified": 0
         }
-        rest_res = rest_fallback_request('users', method='POST', data=user_data)
+        rest_res = rest_fallback_request('users', method='POST', data={
+            "email": email,
+            "password": hashed,
+            "name": name,
+            "verification_code": verification_code,
+            "code_expiry": code_expiry,
+            "status": "Active",
+            "verified": 0,
+            "role": "user"
+        })
         if not rest_res:
             return jsonify({"error": "Could not register user. Database connection failed."}), 500
 
@@ -503,7 +526,8 @@ def login():
             "email": email,
             "name": user['name'],
             "phone": user['phone'],
-            "address": user['address']
+            "address": user['address'],
+            "role": user.get('role', 'user')
         }
     }), 200
 
@@ -516,7 +540,7 @@ def user_profile():
     conn = get_db_connection()
     if not conn:
         if request.method == 'GET':
-            user_list = rest_fallback_request('users', method='GET', query_params={'email': f'eq.{email}', 'select': 'name,email,phone,address'})
+            user_list = rest_fallback_request('users', method='GET', query_params={'email': f'eq.{email}', 'select': 'name,email,phone,address,role'})
             if not user_list:
                 return jsonify({"error": "User not found"}), 404
             return jsonify(user_list[0]), 200
@@ -530,7 +554,7 @@ def user_profile():
     c = conn.cursor()
 
     if request.method == 'GET':
-        c.execute(q("SELECT name, email, phone, address FROM users WHERE email = ?"), (email,))
+        c.execute(q("SELECT name, email, phone, address, role FROM users WHERE email = ?"), (email,))
         user = c.fetchone()
         conn.close()
         if not user:

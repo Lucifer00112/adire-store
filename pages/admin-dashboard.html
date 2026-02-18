@@ -1056,7 +1056,7 @@
             }
 
             // Extra safety: check if user is actually an admin in the profiles table
-            const profile = await api.get('/user/profile');
+            const profile = await api.get(`/user/profile?email=${user.email}`);
             if (profile.role !== 'admin') {
                 alert('Access Denied: Admin role required.');
                 window.location.href = 'user-dashboard.html';

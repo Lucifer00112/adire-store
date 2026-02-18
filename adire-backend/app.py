@@ -299,7 +299,7 @@ def send_email(to_email, subject, body):
     msg.attach(MIMEText(body, 'plain'))
 
     try:
-        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
+        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=10)
         server.starttls()
         server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         server.sendmail(EMAIL_ADDRESS, to_email, msg.as_string())
@@ -378,6 +378,35 @@ def register():
             existing = rest_fallback_request('users', query_params={'email': f'eq.{email}'})
             if existing and len(existing) > 0:
                 return jsonify({"error": "Email already exists"}), 400
+            if existing and len(existing) > 0:
+                return jsonify({"error": "Email already exists"}), 400
+            
+            # If registration via REST succeeded (which it did if we are here and existing check passed/failed appropriately), we need to send email.
+            # Wait, rest_res is set above. If rest_res is set, we registered successfully via REST.
+            if rest_res:
+                 # Send email logic duplicated here because we can't fall through to 'c.execute' block
+                 subject = "Adire Boutique - Verify Your Email"
+                 body = f"""
+                 Hello {name},
+
+                 Welcome to Adire Boutique!
+
+                 Your verification code is: {verification_code}
+
+                 Enter this code on the site to activate your account.
+                 This code expires in 15 minutes.
+
+                 If you didn't sign up, ignore this email.
+
+                 Thank you!
+                 Adire Team
+                 """
+                 email_sent = send_email(email, subject, body)
+                 if email_sent:
+                     return jsonify({"message": "Registration successful. Check your email for verification code."}), 201
+                 else:
+                     return jsonify({"message": "Registered, but email failed to send. Code: " + verification_code}), 201
+
             return jsonify({"error": "Could not register user. Database connection failed."}), 500
 
     subject = "Adire Boutique - Verify Your Email"
@@ -395,13 +424,11 @@ def register():
 
     Thank you!
     Adire Team
-    """
-    email_sent = send_email(email, subject, body)
-
     if email_sent:
         return jsonify({"message": "Registration successful. Check your email for verification code."}), 201
     else:
         return jsonify({"message": "Registered, but email failed to send. Code: " + verification_code}), 201
+
 
 @app.route('/verify', methods=['POST'])
 def verify():
@@ -454,6 +481,37 @@ def resend_code():
         return jsonify({"error": "Email required"}), 400
 
     conn = get_db_connection()
+    if not conn:
+        # REST Fallback for resend_code
+        user_list = rest_fallback_request('users', query_params={'email': f'eq.{email}'})
+        if not user_list:
+            return jsonify({"error": "User not found"}), 404
+        user = user_list[0]
+        
+        if user.get('verified', 0) == 1:
+            return jsonify({"error": "Email already verified"}), 400
+
+        verification_code = ''.join(random.choices(string.digits, k=6))
+        code_expiry = (datetime.now() + timedelta(minutes=15)).strftime('%Y-%m-%d %H:%M:%S')
+        
+        rest_fallback_request('users', method='PATCH', query_params={'email': f'eq.{email}'},
+                              data={'verification_code': verification_code, 'code_expiry': code_expiry})
+        
+        subject = "Adire Boutique - New Verification Code"
+        body = f"""
+        Hello {user.get('name', 'User')},
+
+        Your new verification code is: {verification_code}
+
+        Enter this code on the site to activate your account.
+        This code expires in 15 minutes.
+
+        Thank you!
+        Adire Team
+        """
+        send_email(email, subject, body)
+        return jsonify({"message": "New code sent to your email."}), 200
+
     c = conn.cursor()
     c.execute(q("SELECT * FROM users WHERE email = ?"), (email,))
     user = c.fetchone()
@@ -567,6 +625,7 @@ def user_profile():
             if updated is None:
                 return jsonify({"error": "Update failed"}), 500
             return jsonify({"message": "Profile updated successfully"}), 200
+        return jsonify({"error": "Database connection failed"}), 500
 
     c = conn.cursor()
 
@@ -779,6 +838,15 @@ def get_products():
     products = []
     try:
         conn = get_db_connection()
+    conn = get_db_connection()
+    if not conn:
+        print("Attempting REST fallback for get_products (conn is None)...")
+        rest_products = rest_fallback_request('products')
+        if rest_products:
+            products = rest_products
+        return jsonify(products), 200
+
+    try:
         c = conn.cursor()
         c.execute(q("SELECT * FROM products"))
         products = [dict(row) for row in c.fetchall()]
@@ -795,7 +863,6 @@ def get_products():
 @app.route('/track/<id>', methods=['GET'])
 def track_order(id):
     order = None
-    try:
         conn = get_db_connection()
         c = conn.cursor()
         c.execute(q("SELECT id, status, tracking_number, estimated_delivery, timeline FROM orders WHERE id = ?"), (id,))
@@ -1414,6 +1481,25 @@ def admin_manage_settings():
         return jsonify({"error": "Admin access only"}), 403
 
     conn = get_db_connection()
+    if not conn:
+        if request.method == 'GET':
+            settings = {}
+            rest_settings = rest_fallback_request('settings')
+            if rest_settings:
+                for row in rest_settings:
+                    settings[row['key']] = row['value']
+            return jsonify(settings), 200
+        
+        if request.method == 'POST':
+            data = request.get_json()
+            for key, value in data.items():
+                existing = rest_fallback_request('settings', query_params={'key': f'eq.{key}'})
+                if existing:
+                    rest_fallback_request('settings', method='PATCH', query_params={'key': f'eq.{key}'}, data={'value': value})
+                else:
+                    rest_fallback_request('settings', method='POST', data={'key': key, 'value': value})
+            return jsonify({"message": "Settings updated"}), 200
+
     c = conn.cursor()
 
     if request.method == 'POST':
@@ -1440,6 +1526,11 @@ def admin_get_logs():
         return jsonify({"error": "Admin access only"}), 403
 
     conn = get_db_connection()
+    if not conn:
+        logs = rest_fallback_request('admin_logs', query_params={'order': 'created_at.desc'})
+        if logs: return jsonify(logs), 200
+        return jsonify([]), 200
+
     c = conn.cursor()
     c.execute(q("SELECT * FROM admin_logs ORDER BY created_at DESC LIMIT 100"))
     logs = [dict(row) for row in c.fetchall()]
@@ -1469,6 +1560,13 @@ def get_all_reviews():
         return jsonify({"error": "Admin access only"}), 403
 
     conn = get_db_connection()
+    if not conn:
+        reviews = []
+        rest_reviews = rest_fallback_request('reviews', query_params={'order': 'created_at.desc'})
+        if rest_reviews:
+            reviews = rest_reviews
+        return jsonify(reviews), 200
+
     # Join with products to get product name
     query = """
         SELECT r.*, p.name as product_name 
@@ -1491,6 +1589,8 @@ def manage_review(id):
         return jsonify({"error": "Admin access only"}), 403
 
     conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Database connection failed"}), 500
     
     if request.method == 'DELETE':
         conn.execute("DELETE FROM reviews WHERE id = ?", (id,))
@@ -1498,7 +1598,6 @@ def manage_review(id):
     else: # PUT - Approve status
         status = request.get_json().get('status', 'Approved')
         conn.execute("UPDATE reviews SET status = ? WHERE id = ?", (status, id))
-        msg = f"Review {status}"
     
     conn.commit()
     conn.close()

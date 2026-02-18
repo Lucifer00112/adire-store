@@ -368,8 +368,8 @@ def register():
             "verification_code": verification_code,
             "code_expiry": code_expiry,
             "status": "Active",
-            "verified": 0,
-            "role": "user"
+            "verified": 0
+            # role removed for initial resilience until schema is updated via dashboard
         })
         if not rest_res:
             return jsonify({"error": "Could not register user. Database connection failed."}), 500
@@ -540,10 +540,17 @@ def user_profile():
     conn = get_db_connection()
     if not conn:
         if request.method == 'GET':
+            # Request role, but be prepared for it to be missing if schema hasn't updated
             user_list = rest_fallback_request('users', method='GET', query_params={'email': f'eq.{email}', 'select': 'name,email,phone,address,role'})
             if not user_list:
-                return jsonify({"error": "User not found"}), 404
-            return jsonify(user_list[0]), 200
+                # Try without role as a fallback
+                user_list = rest_fallback_request('users', method='GET', query_params={'email': f'eq.{email}', 'select': 'name,email,phone,address'})
+                if not user_list:
+                    return jsonify({"error": "User not found"}), 404
+            
+            user_data = user_list[0]
+            if 'role' not in user_data: user_data['role'] = 'user'
+            return jsonify(user_data), 200
         if request.method == 'PUT':
             data = request.get_json()
             updated = rest_fallback_request('users', method='PATCH', query_params={'email': f'eq.{email}'}, data=data)

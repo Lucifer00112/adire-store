@@ -4,8 +4,10 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r adire-backend/requirements.txt
-    startCommand: gunicorn --chdir adire-backend app:app
+    startCommand: gunicorn --chdir adire-backend --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120 app:app
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
       - key: DATABASE_URL
         fromEnvVar: DATABASE_URL
       - key: SUPABASE_URL

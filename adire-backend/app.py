@@ -20,17 +20,24 @@ import base64
 import json
 import requests
 
+print("Loading environment variables...")
 load_dotenv()
 
 app = Flask(__name__, static_folder='..', static_url_path='')
 CORS(app)
 
+print("Parsing configuration...")
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', '').strip()
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', '').strip()
 EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS')
 EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
-EMAIL_HOST = os.getenv('EMAIL_HOST')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT') or 587)
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+try:
+    email_port_env = os.getenv('EMAIL_PORT')
+    EMAIL_PORT = int(email_port_env) if email_port_env and email_port_env.strip() else 587
+except ValueError:
+    print(f"Warning: Invalid EMAIL_PORT '{os.getenv('EMAIL_PORT')}', defaulting to 587")
+    EMAIL_PORT = 587
 
 DATABASE_URL = os.getenv('DATABASE_URL')
 SUPABASE_URL = os.getenv('SUPABASE_URL')
@@ -86,6 +93,8 @@ def rest_fallback_request(table, method='GET', query_params=None, data=None):
             resp = requests.post(url, headers=headers, json=data, timeout=10)
         elif method == 'PATCH':
             resp = requests.patch(url, headers=headers, json=data, params=query_params, timeout=10)
+        elif method == 'DELETE':
+            resp = requests.delete(url, headers=headers, params=query_params, timeout=10)
         else:
             return None
             
@@ -132,6 +141,7 @@ def init_db():
                     description TEXT,
                     price INTEGER NOT NULL,
                     image_base64 TEXT,
+                    image_url TEXT,
                     gallery TEXT,
                     category TEXT,
                     stock INTEGER DEFAULT 10,
@@ -140,10 +150,12 @@ def init_db():
                 '''CREATE TABLE IF NOT EXISTS orders (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_email TEXT NOT NULL,
+                    user_id TEXT,
                     items TEXT NOT NULL,
-                    total INTEGER NOT NULL,
-                    address TEXT,
+                    total_amount INTEGER NOT NULL,
+                    shipping_address TEXT,
                     phone TEXT,
+                    payment_method TEXT,
                     status TEXT DEFAULT 'Pending',
                     payment_status TEXT DEFAULT 'Unpaid',
                     delivery_status TEXT DEFAULT 'Pending',
@@ -200,6 +212,7 @@ def init_db():
                     description TEXT,
                     price INTEGER NOT NULL,
                     image_base64 TEXT,
+                    image_url TEXT,
                     gallery TEXT,
                     category TEXT,
                     stock INTEGER DEFAULT 10,
@@ -208,10 +221,12 @@ def init_db():
                 '''CREATE TABLE IF NOT EXISTS orders (
                     id SERIAL PRIMARY KEY,
                     user_email TEXT NOT NULL,
-                    items TEXT NOT NULL,
-                    total INTEGER NOT NULL,
-                    address TEXT,
+                    user_id TEXT,
+                    items JSONB NOT NULL,
+                    total_amount INTEGER NOT NULL,
+                    shipping_address TEXT,
                     phone TEXT,
+                    payment_method TEXT,
                     status TEXT DEFAULT 'Pending',
                     payment_status TEXT DEFAULT 'Unpaid',
                     delivery_status TEXT DEFAULT 'Pending',
@@ -271,13 +286,46 @@ def migrate_db():
             except: pass
             try: c.execute("ALTER TABLE users ADD COLUMN code_expiry DATETIME")
             except: pass
+            try: c.execute("ALTER TABLE products ADD COLUMN image_url TEXT")
+            except: pass
+            # Orders table migrations
+            try: c.execute("ALTER TABLE orders ADD COLUMN user_id TEXT")
+            except: pass
+            try: c.execute("ALTER TABLE orders ADD COLUMN total_amount INTEGER")
+            except: pass
+            try: c.execute("ALTER TABLE orders ADD COLUMN shipping_address TEXT")
+            except: pass
+            try: c.execute("ALTER TABLE orders ADD COLUMN payment_method TEXT")
+            except: pass
         else:
             # Postgres
-            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT")
-            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'")
-            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verified INTEGER DEFAULT 0")
-            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_code TEXT")
-            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS code_expiry TIMESTAMP")
+            try: c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT")
+            except: pass
+            try: c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'")
+            except: pass
+            try: c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verified INTEGER DEFAULT 0")
+            except: pass
+            try: c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_code TEXT")
+            except: pass
+            try: c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS code_expiry TIMESTAMP")
+            except: pass
+            try: c.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT")
+            except: pass
+            # Orders table migrations
+            try: c.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_id TEXT")
+            except: pass
+            try: c.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_amount INTEGER")
+            except: pass
+            try: c.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_address TEXT")
+            except: pass
+            try: c.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT")
+            except: pass
+            
+            # Sync existing and new columns in Postgres if needed
+            try:
+                c.execute("UPDATE orders SET total_amount = total WHERE total_amount IS NULL AND total IS NOT NULL")
+                c.execute("UPDATE orders SET shipping_address = address WHERE shipping_address IS NULL AND address IS NOT NULL")
+            except: pass
         
         # Ensure ADMIN_EMAIL has admin role
         if ADMIN_EMAIL:
@@ -358,76 +406,17 @@ def register():
         conn.commit()
         conn.close()
     except Exception as e:
-        print(f"Direct DB Error in register: {e}")
-        # Fallback to REST API
-        print("Attempting REST fallback for register...")
-        # Try to register via REST
-        rest_res = rest_fallback_request('users', method='POST', data={
-            "email": email,
-            "password": hashed,
-            "name": name,
-            "verification_code": verification_code,
-            "code_expiry": code_expiry,
-            "status": "Active",
-            "verified": 0
-        })
-        
-        if not rest_res:
-            # Check if it failed because of conflict (409) or actual connection failure
-            # We check the 409 by trying to fetch the user
-            existing = rest_fallback_request('users', query_params={'email': f'eq.{email}'})
-            if existing and len(existing) > 0:
-                return jsonify({"error": "Email already exists"}), 400
-            if existing and len(existing) > 0:
-                return jsonify({"error": "Email already exists"}), 400
-            
-            # If registration via REST succeeded (which it did if we are here and existing check passed/failed appropriately), we need to send email.
-            # Wait, rest_res is set above. If rest_res is set, we registered successfully via REST.
-            if rest_res:
-                 # Send email logic duplicated here because we can't fall through to 'c.execute' block
-                 subject = "Adire Boutique - Verify Your Email"
-                 body = f"""
-                 Hello {name},
-
-                 Welcome to Adire Boutique!
-
-                 Your verification code is: {verification_code}
-
-                 Enter this code on the site to activate your account.
-                 This code expires in 15 minutes.
-
-                 If you didn't sign up, ignore this email.
-
-                 Thank you!
-                 Adire Team
-                 """
-                 email_sent = send_email(email, subject, body)
-                 if email_sent:
-                     return jsonify({"message": "Registration successful. Check your email for verification code."}), 201
-                 else:
-                     return jsonify({"message": "Registered, but email failed to send. Code: " + verification_code}), 201
-
-            return jsonify({"error": "Could not register user. Database connection failed."}), 500
+        print(f"Registration Error: {e}")
+        return jsonify({"error": "Registration failed", "details": str(e)}), 500
+    finally:
+        if 'conn' in locals() and conn: conn.close()
 
     subject = "Adire Boutique - Verify Your Email"
-    body = f"""
-    Hello {name},
+    body = f"Hello {name},\n\nWelcome to Adire Boutique!\n\nYour verification code is: {verification_code}\n\nEnter this code on the site to activate your account.\nThis code expires in 15 minutes.\n\nIf you didn't sign up, ignore this email.\n\nThank you!\nAdire Team"
+    
+    send_email(email, subject, body)
+    return jsonify({"message": "Registration successful. Check your email for verification code."}), 201
 
-    Welcome to Adire Boutique!
-
-    Your verification code is: {verification_code}
-
-    Enter this code on the site to activate your account.
-    This code expires in 15 minutes.
-
-    If you didn't sign up, ignore this email.
-
-    Thank you!
-    Adire Team
-    if email_sent:
-        return jsonify({"message": "Registration successful. Check your email for verification code."}), 201
-    else:
-        return jsonify({"message": "Registered, but email failed to send. Code: " + verification_code}), 201
 
 
 @app.route('/verify', methods=['POST'])
@@ -454,11 +443,11 @@ def verify():
         print(f"Direct DB Error in verify: {e}")
         # REST Fallback
         print("Attempting REST fallback for verify...")
-        rest_users = rest_fallback_request('users', query_params={'email': f'eq.{email}', 'verification_code': f'eq.{code}'})
+        rest_users = rest_fallback_request('users', query_params={'email': "eq.{}".format(email), 'verification_code': "eq.{}".format(code)})
         # Note: can't easily check expiry via REST simple query without complex PostgREST filters
         if rest_users and len(rest_users) > 0:
             user = rest_users[0]
-            rest_fallback_request('users', method='PATCH', query_params={'email': f'eq.{email}'}, 
+            rest_fallback_request('users', method='PATCH', query_params={'email': "eq.{}".format(email)}, 
                                   data={"verified": 1, "verification_code": None, "code_expiry": None})
 
     if not user:
@@ -483,7 +472,7 @@ def resend_code():
     conn = get_db_connection()
     if not conn:
         # REST Fallback for resend_code
-        user_list = rest_fallback_request('users', query_params={'email': f'eq.{email}'})
+        user_list = rest_fallback_request('users', query_params={'email': "eq.{}".format(email)})
         if not user_list:
             return jsonify({"error": "User not found"}), 404
         user = user_list[0]
@@ -494,59 +483,43 @@ def resend_code():
         verification_code = ''.join(random.choices(string.digits, k=6))
         code_expiry = (datetime.now() + timedelta(minutes=15)).strftime('%Y-%m-%d %H:%M:%S')
         
-        rest_fallback_request('users', method='PATCH', query_params={'email': f'eq.{email}'},
+        rest_fallback_request('users', method='PATCH', query_params={'email': "eq.{}".format(email)},
                               data={'verification_code': verification_code, 'code_expiry': code_expiry})
         
         subject = "Adire Boutique - New Verification Code"
-        body = f"""
-        Hello {user.get('name', 'User')},
-
-        Your new verification code is: {verification_code}
-
-        Enter this code on the site to activate your account.
-        This code expires in 15 minutes.
-
-        Thank you!
-        Adire Team
-        """
+        body = f"Hello {user.get('name', 'User')},\n\nYour new verification code is: {verification_code}\n\nEnter this code on the site to activate your account.\nThis code expires in 15 minutes.\n\nThank you!\nAdire Team"
         send_email(email, subject, body)
         return jsonify({"message": "New code sent to your email."}), 200
 
-    c = conn.cursor()
-    c.execute(q("SELECT * FROM users WHERE email = ?"), (email,))
-    user = c.fetchone()
+    try:
+        c = conn.cursor()
+        c.execute(q("SELECT * FROM users WHERE email = ?"), (email,))
+        user = c.fetchone()
 
-    if not user:
+        if not user:
+            conn.close()
+            return jsonify({"error": "User not found"}), 404
+
+        if user['verified'] == 1:
+            conn.close()
+            return jsonify({"error": "Email already verified"}), 400
+
+        verification_code = ''.join(random.choices(string.digits, k=6))
+        code_expiry = (datetime.now() + timedelta(minutes=15)).strftime('%Y-%m-%d %H:%M:%S')
+
+        c.execute(q("UPDATE users SET verification_code = ?, code_expiry = ? WHERE email = ?"),
+                  (verification_code, code_expiry, email))
+        conn.commit()
         conn.close()
-        return jsonify({"error": "User not found"}), 404
 
-    if user['verified'] == 1:
-        conn.close()
-        return jsonify({"error": "Email already verified"}), 400
+        subject = "Adire Boutique - New Verification Code"
+        body = f"Hello {user['name']},\n\nYour new verification code is: {verification_code}\n\nEnter this code on the site to activate your account.\nThis code expires in 15 minutes.\n\nThank you!\nAdire Team"
+        send_email(email, subject, body)
 
-    verification_code = ''.join(random.choices(string.digits, k=6))
-    code_expiry = (datetime.now() + timedelta(minutes=15)).strftime('%Y-%m-%d %H:%M:%S')
-
-    c.execute(q("UPDATE users SET verification_code = ?, code_expiry = ? WHERE email = ?"),
-              (verification_code, code_expiry, email))
-    conn.commit()
-    conn.close()
-
-    subject = "Adire Boutique - New Verification Code"
-    body = f"""
-    Hello {user['name']},
-
-    Your new verification code is: {verification_code}
-
-    Enter this code on the site to activate your account.
-    This code expires in 15 minutes.
-
-    Thank you!
-    Adire Team
-    """
-    send_email(email, subject, body)
-
-    return jsonify({"message": "New code sent to your email."}), 200
+        return jsonify({"message": "New code sent to your email."}), 200
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -567,7 +540,7 @@ def login():
         print(f"Direct DB Error in login: {e}")
         # Fallback to REST API
         print("Attempting REST fallback for login...")
-        rest_users = rest_fallback_request('users', query_params={'email': f'eq.{email}'})
+        rest_users = rest_fallback_request('users', query_params={'email': "eq.{}".format(email)})
         if rest_users and len(rest_users) > 0:
             user = rest_users[0]
 
@@ -605,7 +578,7 @@ def user_profile():
     if not conn:
         if request.method == 'GET':
             # Defensive: Get all columns and handle missing fields in Python
-            user_list = rest_fallback_request('users', method='GET', query_params={'email': f'eq.{email}'})
+            user_list = rest_fallback_request('users', method='GET', query_params={'email': "eq.{}".format(email)})
             if not user_list:
                 return jsonify({"error": "User not found"}), 404
             
@@ -621,7 +594,7 @@ def user_profile():
             return jsonify(resolved_data), 200
         if request.method == 'PUT':
             data = request.get_json()
-            updated = rest_fallback_request('users', method='PATCH', query_params={'email': f'eq.{email}'}, data=data)
+            updated = rest_fallback_request('users', method='PATCH', query_params={'email': "eq.{}".format(email)}, data=data)
             if updated is None:
                 return jsonify({"error": "Update failed"}), 500
             return jsonify({"message": "Profile updated successfully"}), 200
@@ -673,7 +646,7 @@ def change_password():
     conn = get_db_connection()
     if not conn:
         # Fetch user via REST first to verify old password
-        user_list = rest_fallback_request('users', query_params={'email': f'eq.{email}'})
+        user_list = rest_fallback_request('users', query_params={'email': "eq.{}".format(email)})
         if not user_list: return jsonify({"error": "User not found"}), 404
         user = user_list[0]
         stored_password = user['password']
@@ -684,7 +657,7 @@ def change_password():
         # Update password via REST
         hashed = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
         if DATABASE_URL: hashed = hashed.decode('utf-8')
-        updated = rest_fallback_request('users', method='PATCH', query_params={'email': f'eq.{email}'}, data={'password': hashed})
+        updated = rest_fallback_request('users', method='PATCH', query_params={'email': "eq.{}".format(email)}, data={'password': hashed})
         if updated is None: return jsonify({"error": "Failed to update profile via REST"}), 500
         return jsonify({"message": "Password changed successfully"}), 200
 
@@ -733,12 +706,13 @@ def admin_add_product():
     description = data.get('description')
     price = data.get('price')
     image_base64 = data.get('image_base64')
+    image_url = data.get('image_url')
     gallery = data.get('gallery', '[]')
     category = data.get('category')
     stock = data.get('stock', 10)
 
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     if not name or not price:
@@ -748,15 +722,15 @@ def admin_add_product():
     if not conn:
         res = rest_fallback_request('products', method='POST', data={
             'name': name, 'description': description, 'price': price,
-            'image_base64': image_base64, 'gallery': gallery,
+            'image_base64': image_base64, 'image_url': image_url, 'gallery': gallery,
             'category': category, 'stock': stock
         })
         if res is None: return jsonify({"error": "Failed to add product"}), 500
         return jsonify({"message": "Product added successfully"}), 201
 
     c = conn.cursor()
-    c.execute(q("INSERT INTO products (name, description, price, image_base64, gallery, category, stock) VALUES (?, ?, ?, ?, ?, ?, ?)"),
-              (name, description, price, image_base64, gallery, category, stock))
+    c.execute(q("INSERT INTO products (name, description, price, image_base64, image_url, gallery, category, stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"),
+              (name, description, price, image_base64, image_url, gallery, category, stock))
     conn.commit()
     conn.close()
 
@@ -765,10 +739,24 @@ def admin_add_product():
 @app.route('/admin/products/<id>', methods=['PUT', 'DELETE'])
 def admin_manage_product(id):
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     conn = get_db_connection()
+    if not conn:
+        # Fallback to REST
+        if request.method == 'DELETE':
+            res = rest_fallback_request('products', method='DELETE', query_params={'id': f"eq.{id}"})
+            if res is None: return jsonify({"error": "Failed to delete product (REST)"}), 500
+            return jsonify({"message": "Product deleted"}), 200
+        elif request.method == 'PUT':
+            data = request.get_json()
+            # Map PUT to PATCH for Supabase
+            res = rest_fallback_request('products', method='PATCH', data=data, query_params={'id': f"eq.{id}"})
+            if res is None: return jsonify({"error": "Failed to update product (REST)"}), 500
+            return jsonify({"message": "Product updated"}), 200
+        return jsonify({"error": "Database unavailable"}), 500
+
     c = conn.cursor()
 
     if request.method == 'DELETE':
@@ -783,17 +771,19 @@ def admin_manage_product(id):
         description = data.get('description')
         price = data.get('price')
         image_base64 = data.get('image_base64')
+        image_url = data.get('image_url')
         gallery = data.get('gallery') # New gallery field
         category = data.get('category')
         stock = data.get('stock')
 
-        # Build update query dynamically
+    # Build update query dynamically
         updates = []
         params = []
         if name: updates.append("name = ?"); params.append(name)
         if description: updates.append("description = ?"); params.append(description)
         if price is not None: updates.append("price = ?"); params.append(price)
         if image_base64: updates.append("image_base64 = ?"); params.append(image_base64)
+        if image_url: updates.append("image_url = ?"); params.append(image_url)
         if gallery: updates.append("gallery = ?"); params.append(gallery)
         if category: updates.append("category = ?"); params.append(category)
         if stock is not None: updates.append("stock = ?"); params.append(stock)
@@ -802,9 +792,8 @@ def admin_manage_product(id):
             conn.close()
             return jsonify({"message": "Nothing to update"}), 400
 
-        params.append(id)
-        query = f"UPDATE products SET {', '.join(updates)} WHERE id = ?"
-        c.execute(q(query), tuple(params))
+        query_str = "UPDATE products SET " + ", ".join(updates) + " WHERE id = ?"
+        c.execute(q(query_str), params + [id])
         conn.commit()
         conn.close()
         return jsonify({"message": "Product updated"}), 200
@@ -812,7 +801,7 @@ def admin_manage_product(id):
 @app.route('/admin/products/<id>/stylize', methods=['POST'])
 def admin_stylize_product(id):
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     conn = get_db_connection()
@@ -836,8 +825,7 @@ def admin_stylize_product(id):
 @app.route('/products', methods=['GET'])
 def get_products():
     products = []
-    try:
-        conn = get_db_connection()
+
     conn = get_db_connection()
     if not conn:
         print("Attempting REST fallback for get_products (conn is None)...")
@@ -863,6 +851,7 @@ def get_products():
 @app.route('/track/<id>', methods=['GET'])
 def track_order(id):
     order = None
+    try:
         conn = get_db_connection()
         c = conn.cursor()
         c.execute(q("SELECT id, status, tracking_number, estimated_delivery, timeline FROM orders WHERE id = ?"), (id,))
@@ -871,7 +860,7 @@ def track_order(id):
         conn.close()
     except Exception as e:
         print(f"Direct DB Error in track_order: {e}")
-        rest_orders = rest_fallback_request('orders', query_params={'id': f'eq.{id}'})
+        rest_orders = rest_fallback_request('orders', query_params={'id': "eq.{}".format(id)})
         if rest_orders: order = rest_orders[0]
 
     if not order:
@@ -889,7 +878,7 @@ def get_user_orders(email):
         conn.close()
     except Exception as e:
         print(f"Direct DB Error in get_user_orders: {e}")
-        rest_orders = rest_fallback_request('orders', query_params={'user_email': f'eq.{email}', 'order': 'created_at.desc'})
+        rest_orders = rest_fallback_request('orders', query_params={'user_email': "eq.{}".format(email), 'order': 'created_at.desc'})
         if rest_orders: orders = rest_orders
 
     return jsonify(orders), 200
@@ -897,23 +886,34 @@ def get_user_orders(email):
 @app.route('/orders', methods=['POST'])
 def create_order():
     data = request.get_json()
-    email = data.get('user_email') # Renamed from user_email to email for consistency with user_id
+    email = data.get('user_email')
     user_id = data.get('user_id')
-    items = data.get('items') # JSON string of items
-    total_amount = data.get('total') # Renamed from total to total_amount
-    address = data.get('address') # Renamed from address to shipping_address
+    items = data.get('items') # Can be list or string
+    total_amount = data.get('total') or data.get('total_amount')
+    address = data.get('address') or data.get('shipping_address')
     phone = data.get('phone')
-    payment_method = data.get('payment_method')
+    payment_method = data.get('payment_method', 'Cash on Delivery')
 
-    if not email or not user_id or not items or not total_amount or not address or not phone or not payment_method:
-        return jsonify({"error": "Missing required order details"}), 400
+    if not email or not items or not total_amount or not address or not phone:
+        return jsonify({"error": "Missing required order details", "received": data}), 400
+
+    # Harden items parsing
+    if isinstance(items, str):
+        try:
+            items_json = items
+            items_list = json.loads(items)
+        except:
+            return jsonify({"error": "Invalid items format"}), 400
+    else:
+        items_json = json.dumps(items)
+        items_list = items
 
     # Create order
     try:
         conn = get_db_connection()
         c = conn.cursor()
         c.execute(q("INSERT INTO orders (user_email, user_id, items, total_amount, shipping_address, phone, payment_method, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"),
-                  (email, user_id, json.dumps(items), total_amount, address, phone, payment_method, 'Pending'))
+                  (email, user_id, items_json, total_amount, address, phone, payment_method, 'Pending'))
         conn.commit()
         conn.close()
     except Exception as e:
@@ -923,7 +923,7 @@ def create_order():
         order_data = {
             "user_email": email,
             "user_id": user_id,
-            "items": json.dumps(items),
+            "items": items_list, # Supabase handles JSONB
             "total_amount": total_amount,
             "shipping_address": address,
             "phone": phone,
@@ -937,25 +937,8 @@ def create_order():
         items_parsed = json.loads(items)
         items_list = "\n".join([f"- {item.get('name')} (x{item.get('quantity')}) - N{item.get('price') * item.get('quantity'):,}" for item in items_parsed])
         
-        subject = f"NEW ORDER RECEIVED - N{total_amount:,}"
-        body = f"""
-        Hello Admin,
-
-        A new order has been placed on Eury Textiles!
-
-        ORDER DETAILS:
-        Customer: {email}
-        Phone: {phone}
-        Address: {address}
-        Total: N{total_amount:,}
-
-        ITEMS:
-        {items_list}
-
-        Please login to the Admin Dashboard to manage this order.
-
-        Thank you!
-        """
+        subject = "NEW ORDER RECEIVED - N{:,}".format(total_amount)
+        body = "Hello Admin,\n\nA new order has been placed on Eury Textiles!\n\nORDER DETAILS:\nCustomer: {}\nPhone: {}\nAddress: {}\nTotal: N{:,}\n\nITEMS:\n{}\n\nPlease login to the Admin Dashboard to manage this order.\n\nThank you!".format(email, phone, address, total_amount, items_list)
         send_email(ADMIN_EMAIL, subject, body)
     except Exception as e:
         print(f"Admin notification failed: {str(e)}")
@@ -972,14 +955,14 @@ def mark_order_received(id):
         conn.close()
     except Exception as e:
         print(f"Direct DB Error in mark_order_received: {e}")
-        rest_fallback_request('orders', method='PATCH', query_params={'id': f'eq.{id}'}, data={"status": "Received"})
+        rest_fallback_request('orders', method='PATCH', query_params={'id': "eq.{}".format(id)}, data={"status": "Received"})
 
     return jsonify({"message": "Order marked as received"}), 200
 
 @app.route('/admin/orders', methods=['GET'])
 def get_all_orders():
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     search = request.args.get('search', '').strip()
@@ -1005,7 +988,7 @@ def get_all_orders():
                 conditions.append("(id LIKE ? OR user_email LIKE ?)")
             else:
                 conditions.append("(CAST(id AS TEXT) LIKE %s OR user_email ILIKE %s)")
-            search_param = f"%{search}%"
+            search_param = "%" + search + "%"
             params.extend([search_param, search_param])
         
         if status:
@@ -1031,10 +1014,10 @@ def get_all_orders():
         print(f"Direct DB Error in get_all_orders: {e}")
         # Simplified REST fallback
         query_params = {'order': 'created_at.desc', 'limit': limit, 'offset': offset}
-        if status: query_params['status'] = f'eq.{status}'
+        if status: query_params['status'] = "eq." + status
         if search: 
-             search_val = f'ilike.*{search}*'
-             query_params['or'] = f'(user_email.{search_val})'
+             search_val = "ilike.*" + search + "*"
+             query_params['or'] = "(user_email." + search_val + ")"
         
         rest_orders = rest_fallback_request('orders', query_params=query_params)
         if rest_orders:
@@ -1051,7 +1034,7 @@ def get_all_orders():
 @app.route('/admin/products/<int:id>', methods=['PUT'])
 def admin_update_product(id):
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     data = request.get_json()
@@ -1079,9 +1062,8 @@ def admin_update_product(id):
         return jsonify({"error": "No fields to update"}), 400
     
     params.append(id)
-    query = f"UPDATE products SET {', '.join(updates)} WHERE id = {get_placeholder() if 'get_placeholder' in globals() else '?'}"
-    # Wait, I have q helper now.
-    query = q(f"UPDATE products SET {', '.join(updates)} WHERE id = ?")
+    query_str = "UPDATE products SET " + ", ".join(updates) + " WHERE id = ?"
+    query = q(query_str)
     c.execute(query, params)
     conn.commit()
     conn.close()
@@ -1091,7 +1073,7 @@ def admin_update_product(id):
 @app.route('/admin/products/<int:id>', methods=['DELETE'])
 def admin_delete_product(id):
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     conn = get_db_connection()
@@ -1105,7 +1087,7 @@ def admin_delete_product(id):
 @app.route('/admin/orders/<id>', methods=['GET'])
 def admin_get_order(id):
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     order = None
@@ -1118,7 +1100,7 @@ def admin_get_order(id):
         conn.close()
     except Exception as e:
         print(f"Direct DB Error in admin_get_order: {e}")
-        rest_orders = rest_fallback_request('orders', query_params={'id': f'eq.{id}'})
+        rest_orders = rest_fallback_request('orders', query_params={'id': "eq.{}".format(id)})
         if rest_orders: order = rest_orders[0]
 
     if not order:
@@ -1129,7 +1111,7 @@ def admin_get_order(id):
 @app.route('/admin/orders/<id>', methods=['PUT'])
 def admin_update_order(id):
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     data = request.get_json()
@@ -1137,93 +1119,35 @@ def admin_update_order(id):
     payment_status = data.get('payment_status')
     delivery_status = data.get('delivery_status')
     tracking_number = data.get('tracking_number')
-    estimated_delivery = data.get('estimated_delivery')
-    refund_amount = data.get('refund_amount')
 
-    updates = {}
-    current = None
-    
-    try:
-        conn = get_db_connection()
-        if not conn: raise Exception("Conn failed")
-        c = conn.cursor()
-        c.execute(q("SELECT timeline, status, payment_status, delivery_status, refunded_amount FROM orders WHERE id = ?"), (id,))
-        row = c.fetchone()
-        if row: current = dict(row)
-        conn.close()
-    except Exception as e:
-        print(f"Check current order error: {e}")
-        rest_curr = rest_fallback_request('orders', query_params={'id': f'eq.{id}'})
-        if rest_curr: current = rest_curr[0]
+    updates = []
+    params = []
+    if status: updates.append("status = ?"); params.append(status)
+    if payment_status: updates.append("payment_status = ?"); params.append(payment_status)
+    if delivery_status: updates.append("delivery_status = ?"); params.append(delivery_status)
+    if tracking_number: updates.append("tracking_number = ?"); params.append(tracking_number)
 
-    if not current:
-        return jsonify({"error": "Order not found"}), 404
-    
-    timeline = []
-    if current.get('timeline'):
-        import json
-        try:
-            timeline = json.loads(current['timeline'])
-        except:
-            timeline = []
-            
-    if status and status != current['status']:
-        updates['status'] = status
-        timeline.append({"date": datetime.now().strftime('%Y-%m-%d %H:%M'), "action": f"Status changed to {status}"})
-        
-    if payment_status and payment_status != current['payment_status']:
-        updates['payment_status'] = payment_status
-        timeline.append({"date": datetime.now().strftime('%Y-%m-%d %H:%M'), "action": f"Payment marked as {payment_status}"})
-        
-    if delivery_status and delivery_status != current['delivery_status']:
-        updates['delivery_status'] = delivery_status
-        timeline.append({"date": datetime.now().strftime('%Y-%m-%d %H:%M'), "action": f"Delivery updated to {delivery_status}"})
-        
-    if tracking_number is not None:
-        updates['tracking_number'] = tracking_number
-        timeline.append({"date": datetime.now().strftime('%Y-%m-%d %H:%M'), "action": f"Tracking number updated: {tracking_number}"})
-        
-    if estimated_delivery:
-        updates['estimated_delivery'] = estimated_delivery
-
-    if refund_amount is not None:
-        new_refund_total = (current['refunded_amount'] or 0) + int(refund_amount)
-        updates['refunded_amount'] = new_refund_total
-        timeline.append({"date": datetime.now().strftime('%Y-%m-%d %H:%M'), "action": f"Issued refund of ₦{refund_amount}. Total refunded: ₦{new_refund_total}"})
-        if status != 'Refunded': # Auto-update status if fully/partially refunded and not already set
-             updates['status'] = 'Refunded'
-        
     if not updates:
-        return jsonify({"message": "No changes"}), 200
-
-    import json
-    updates['timeline'] = json.dumps(timeline)
+        return jsonify({"error": "No fields to update"}), 400
 
     try:
         conn = get_db_connection()
-        if not conn: raise Exception("Conn failed")
         c = conn.cursor()
-        up_items = []
-        up_params = []
-        for k, v in updates.items():
-            up_items.append(f"{k} = ?")
-            up_params.append(v)
-            
-        up_params.append(id)
-        c.execute(q(f"UPDATE orders SET {', '.join(up_items)} WHERE id = ?"), up_params)
+        query_str = "UPDATE orders SET " + ", ".join(updates) + " WHERE id = ?"
+        c.execute(q(query_str), params + [id])
         conn.commit()
         conn.close()
     except Exception as e:
         print(f"Direct DB Error in admin_update_order: {e}")
-        rest_fallback_request('orders', method='PATCH', query_params={'id': f'eq.{id}'}, data=updates)
-    
-    log_admin_action(ADMIN_EMAIL, f"Updated order {id}", f"Fields: {list(updates.keys())}")
-    return jsonify({"message": "Order updated"}), 200
+        # REST fallback (Supabase uses PATCH for partial updates)
+        rest_fallback_request('orders', method='PATCH', query_params={'id': f"eq.{id}"}, data=data)
+
+    return jsonify({"message": "Order updated successfully"}), 200
 
 @app.route('/admin/customers', methods=['GET'])
 def admin_get_customers():
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     search = request.args.get('search', '').strip()
@@ -1243,7 +1167,8 @@ def admin_get_customers():
                 conditions.append("(name LIKE ? OR email LIKE ? OR phone LIKE ?)")
             else:
                 conditions.append("(name ILIKE %s OR email ILIKE %s OR phone ILIKE %s)")
-            search_param = f"%{search}%"
+            
+            search_param = "%" + search + "%"
             params.extend([search_param, search_param, search_param])
         
         if status:
@@ -1261,15 +1186,14 @@ def admin_get_customers():
         users = [dict(row) for row in c.fetchall()]
         conn.close()
     except Exception as e:
-        print(f"Direct DB Error in admin_get_customers: {e}")
+        print("Direct DB Error in admin_get_customers: " + str(e))
         print("Attempting REST fallback for admin_get_customers...")
         # Simple fallback without complex search for now
         query_params = {}
-        if status: query_params['status'] = f"eq.{status}"
+        if status: query_params['status'] = "eq." + status
         # For search, we combine .or with ilike
         if search:
-            search_val = f"ilike.*{search}*"
-            query_params['or'] = f"(name.{search_val},email.{search_val},phone.{search_val})"
+            query_params['or'] = "(name.ilike.*" + search + "*,email.ilike.*" + search + "*,phone.ilike.*" + search + "*)"
         
         rest_users = rest_fallback_request('users', query_params=query_params)
         if rest_users:
@@ -1280,7 +1204,7 @@ def admin_get_customers():
 @app.route('/admin/customers/<id>', methods=['GET', 'PUT'])
 def admin_manage_customer(id):
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     user = None
@@ -1307,11 +1231,11 @@ def admin_manage_customer(id):
         except Exception as e:
             print(f"Direct DB Error in manage_customer (GET): {e}")
             print("Attempting REST fallback...")
-            rest_users = rest_fallback_request('users', query_params={'id': f'eq.{id}'})
+            rest_users = rest_fallback_request('users', query_params={'id': "eq.{}".format(id)})
             if rest_users:
                 user = rest_users[0]
                 # REST orders fallback
-                rest_orders = rest_fallback_request('orders', query_params={'user_id': f'eq.{id}', 'order': 'created_at.desc'})
+                rest_orders = rest_fallback_request('orders', query_params={'user_id': "eq.{}".format(id), 'order': 'created_at.desc'})
                 if rest_orders:
                     orders = rest_orders
                     stats['order_count'] = len(orders)
@@ -1344,13 +1268,14 @@ def admin_manage_customer(id):
                 up_items.append(f"{k} = ?")
                 up_params.append(v)
             up_params.append(id)
-            c.execute(q(f"UPDATE users SET {', '.join(up_items)} WHERE id = ?"), up_params)
+            query_str = "UPDATE users SET " + ", ".join(up_items) + " WHERE id = ?"
+            c.execute(q(query_str), up_params)
             conn.commit()
             conn.close()
         except Exception as e:
             print(f"Direct DB Error in manage_customer (PUT): {e}")
             print("Attempting REST fallback...")
-            rest_fallback_request('users', method='PATCH', query_params={'id': f'eq.{id}'}, data=updates)
+            rest_fallback_request('users', method='PATCH', query_params={'id': "eq.{}".format(id)}, data=updates)
             
         log_admin_action(ADMIN_EMAIL, f"Updated customer {id}", f"Details: {updates}")
     
@@ -1359,7 +1284,7 @@ def admin_manage_customer(id):
 @app.route('/admin/reports', methods=['GET'])
 def admin_get_reports():
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     revenue_trends = []
@@ -1477,7 +1402,7 @@ def admin_export_reports():
 @app.route('/admin/settings', methods=['GET', 'POST'])
 def admin_manage_settings():
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     conn = get_db_connection()
@@ -1493,9 +1418,9 @@ def admin_manage_settings():
         if request.method == 'POST':
             data = request.get_json()
             for key, value in data.items():
-                existing = rest_fallback_request('settings', query_params={'key': f'eq.{key}'})
+                existing = rest_fallback_request('settings', query_params={'key': "eq.{}".format(key)})
                 if existing:
-                    rest_fallback_request('settings', method='PATCH', query_params={'key': f'eq.{key}'}, data={'value': value})
+                    rest_fallback_request('settings', method='PATCH', query_params={'key': "eq.{}".format(key)}, data={'value': value})
                 else:
                     rest_fallback_request('settings', method='POST', data={'key': key, 'value': value})
             return jsonify({"message": "Settings updated"}), 200
@@ -1522,7 +1447,7 @@ def admin_manage_settings():
 @app.route('/admin/logs', methods=['GET'])
 def admin_get_logs():
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     conn = get_db_connection()
@@ -1556,7 +1481,7 @@ def add_review():
 @app.route('/admin/reviews', methods=['GET'])
 def get_all_reviews():
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     conn = get_db_connection()
@@ -1568,12 +1493,7 @@ def get_all_reviews():
         return jsonify(reviews), 200
 
     # Join with products to get product name
-    query = """
-        SELECT r.*, p.name as product_name 
-        FROM reviews r 
-        LEFT JOIN products p ON r.product_id = p.id 
-        ORDER BY r.created_at DESC
-    """
+    query = "SELECT r.*, p.name as product_name FROM reviews r LEFT JOIN products p ON r.product_id = p.id ORDER BY r.created_at DESC"
     conn.execute(query)
     # Correct way to fetch with join using row_factory
     c = conn.cursor()
@@ -1585,7 +1505,7 @@ def get_all_reviews():
 @app.route('/admin/reviews/<id>', methods=['PUT', 'DELETE'])
 def manage_review(id):
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     conn = get_db_connection()
@@ -1607,7 +1527,7 @@ def manage_review(id):
 @app.route('/admin/report-stats', methods=['GET'])
 def get_report_stats():
     auth_header = request.headers.get('Authorization')
-    if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
         return jsonify({"error": "Admin access only"}), 403
 
     stats = {}
@@ -1642,14 +1562,39 @@ def get_report_stats():
 
     return jsonify(stats), 200
 
-if __name__ == '__main__':
-    # Initialize database on startup
+@app.route('/api/init-db', methods=['POST'])
+def manual_init_db():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or auth_header != "Bearer " + ADMIN_PASSWORD:
+        return jsonify({"error": "Admin access only"}), 403
+    
     try:
         init_db()
         migrate_db()
-        print("Database initialized successfully.")
+        return jsonify({"message": "Database initialized/migrated manually"}), 200
     except Exception as e:
-        print(f"Warning: Database initialization skipped: {e}")
-        
+        return jsonify({"error": str(e)}), 500
+
+# Global flag to ensure database initialization only runs once
+_db_initialized = False
+
+@app.before_request
+def startup_initialization():
+    global _db_initialized
+    if not _db_initialized:
+        try:
+            print(">>> Running first-request database initialization...")
+            init_db()
+            migrate_db()
+            print(">>> Database initialization/migration completed.")
+            _db_initialized = True
+        except Exception as e:
+            print(f">>> CRITICAL: Startup initialization failed: {e}")
+            # We don't block the request, but log the failure
+            _db_initialized = True 
+
+if __name__ == '__main__':
+    # For local development
+    print(">>> Starting Flask development server...")
     port = int(os.environ.get('PORT', 5000))
-    app.run(debug=False, host='0.0.0.0', port=port)
+    app.run(debug=True, host='0.0.0.0', port=port)

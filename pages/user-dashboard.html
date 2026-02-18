@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - Eury Textiles</title>
     <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
     <style>
         * {
@@ -24,31 +24,34 @@
 
         /* Top Navigation Bar */
         .top-nav {
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(12px);
-            margin: 10px 5%;
-            padding: 12px 20px;
-            box-shadow: 0 8px 32px 0 rgba(61, 43, 125, 0.1);
-            position: sticky;
-            top: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
             z-index: 1000;
-            border-radius: 50px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.05);
         }
 
         .nav-container {
+            width: 100%;
             max-width: 1400px;
             margin: 0 auto;
-            padding: 0 40px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
         .logo {
-            font-family: 'Outfit', sans-serif;
+            font-family: 'Playfair Display', serif;
             font-size: 28px;
             font-weight: 700;
+            font-style: italic;
             color: #D4AF37;
             text-decoration: none;
         }
@@ -94,22 +97,22 @@
 
         /* Hero Section */
         .hero {
+            padding: 100px 40px 60px;
             text-align: center;
-            padding: 80px 40px;
-            max-width: 1200px;
-            margin: 0 auto;
+            background: radial-gradient(circle, rgba(255, 248, 240, 0.9) 0%, rgba(232, 220, 196, 0.9) 100%);
         }
 
         .hero h1 {
-            font-family: 'Outfit', sans-serif;
-            font-size: 64px;
+            font-family: 'Playfair Display', serif;
+            font-size: 4rem;
             color: #D4AF37;
-            margin-bottom: 20px;
-            font-weight: 700;
+            font-style: italic;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .hero h2 {
-            font-family: 'Outfit', sans-serif;
+            font-family: 'Playfair Display', serif;
             font-size: 32px;
             color: #4B0082;
             margin-bottom: 15px;
@@ -286,45 +289,46 @@
         /* Product Grid */
         .products-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 30px;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 40px;
         }
 
         .product-card {
             background: white;
             border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
             transition: all 0.3s;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
         }
 
         .product-card:hover {
             transform: translateY(-10px);
-            box-shadow: 0 10px 30px rgba(75, 0, 130, 0.2);
+            box-shadow: 0 20px 40px rgba(75, 0, 130, 0.15);
         }
 
         .product-image {
             width: 100%;
-            height: 280px;
+            height: 320px;
             object-fit: cover;
         }
 
         .product-info {
             padding: 25px;
+            text-align: center;
         }
 
         .product-name {
-            font-size: 18px;
-            font-weight: 600;
+            font-family: 'Playfair Display', serif;
+            font-size: 22px;
             color: #2c3e50;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
         }
 
         .product-price {
-            font-size: 24px;
+            font-size: 1.5rem;
             font-weight: 700;
             color: #D4AF37;
-            margin-bottom: 15px;
+            margin: 15px 0;
         }
 
         .btn {
@@ -1207,15 +1211,12 @@
 
             const orderData = {
                 user_email: user.email,
-                items: JSON.stringify(cart.items.map(item => ({
-                    id: item.id,
-                    name: item.name,
-                    price: item.price,
-                    quantity: item.quantity
-                }))),
+                user_id: user.id || null,
+                items: cart.items, // Backend handles stringification
                 total: cart.getTotal(),
                 address: address,
-                phone: phone
+                phone: phone,
+                payment_method: 'Cash on Delivery'
             };
 
             try {

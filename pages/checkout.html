@@ -136,14 +136,13 @@
             const btn = e.target.querySelector('button');
 
             const orderData = {
-                user_id: user.id, // Supabase UUID
                 user_email: user.email,
-                items: cart.items, // JSONB in Supabase
+                user_id: user.id || null, // Supabase UUID if available
+                items: cart.items,
                 total: cart.getTotal(),
                 address: document.getElementById('address').value,
                 phone: document.getElementById('phone').value,
-                status: 'Pending',
-                payment_status: 'Unpaid'
+                payment_method: 'Cash on Delivery'
             };
 
             try {

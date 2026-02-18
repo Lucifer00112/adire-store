@@ -972,7 +972,7 @@
                         <img id="img-preview" style="max-height:100px; display:none; margin:10px auto;">
                     </div>
                 </div>
-                <button type="submit" class="btn" style="width:100%">Publish Product</button>
+                <button type="submit" id="submit-btn" class="btn" style="width:100%">Publish Product</button>
             </form>
         </div>
     </div>
@@ -1384,7 +1384,7 @@
                     <td>${o.tracking_number || 'N/A'}</td>
                     <td>${o.estimated_delivery ? new Date(o.estimated_delivery).toLocaleDateString() : 'N/A'}</td>
                     <td><span class="status-badge status-${(o.delivery_status || 'Pending').toLowerCase()}">${o.delivery_status || 'Pending'}</span></td>
-                    <td><button class="btn btn-sm btn-outline" onclick="openOrderDetail(${o.id})">Manage</button></td>
+                    <td><button class="btn btn-sm btn-outline" onclick="openOrderDetail('${o.id}')">Manage</button></td>
                 </tr>
             `).join('');
         }
@@ -1401,7 +1401,7 @@
                     <td>${u.phone || 'N/A'}</td>
                     <td><span class="status-badge status-${u.status.toLowerCase()}">${u.status}</span></td>
                     <td>${new Date(u.created_at).toLocaleDateString()}</td>
-                    <td><button class="btn btn-sm btn-outline" onclick="openCustomerDetail(${u.id})">View</button></td>
+                    <td><button class="btn btn-sm btn-outline" onclick="openCustomerDetail('${u.id}')">View</button></td>
                 </tr>
             `).join('');
         }
@@ -1456,8 +1456,8 @@
                     <td>${r.comment}</td>
                     <td><span class="status-badge status-${r.status === 'Approved' ? 'active' : 'pending'}">${r.status}</span></td>
                     <td>
-                         ${r.status === 'Pending' ? `<button class="btn btn-sm" onclick="approveReview(${r.id})">Approve</button>` : ''}
-                         <button class="btn btn-sm btn-outline" style="color:red; border-color:red;" onclick="deleteReview(${r.id})">Delete</button>
+                         ${r.status === 'Pending' ? `<button class="btn btn-sm" onclick="approveReview('${r.id}')">Approve</button>` : ''}
+                         <button class="btn btn-sm btn-outline" style="color:red; border-color:red;" onclick="deleteReview('${r.id}')">Delete</button>
                     </td>
                 </tr>
             `).join('');

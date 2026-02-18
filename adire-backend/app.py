@@ -694,7 +694,7 @@ def admin_add_product():
 
     return jsonify({"message": "Product added successfully"}), 201
 
-@app.route('/admin/products/<int:id>', methods=['PUT', 'DELETE'])
+@app.route('/admin/products/<id>', methods=['PUT', 'DELETE'])
 def admin_manage_product(id):
     auth_header = request.headers.get('Authorization')
     if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
@@ -741,7 +741,7 @@ def admin_manage_product(id):
         conn.close()
         return jsonify({"message": "Product updated"}), 200
 
-@app.route('/admin/products/<int:id>/stylize', methods=['POST'])
+@app.route('/admin/products/<id>/stylize', methods=['POST'])
 def admin_stylize_product(id):
     auth_header = request.headers.get('Authorization')
     if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
@@ -783,7 +783,7 @@ def get_products():
             
     return jsonify(products), 200
 
-@app.route('/track/<int:id>', methods=['GET'])
+@app.route('/track/<id>', methods=['GET'])
 def track_order(id):
     order = None
     try:
@@ -886,7 +886,7 @@ def create_order():
 
     return jsonify({"message": "Order created successfully"}), 201
 
-@app.route('/orders/<int:id>/receive', methods=['POST'])
+@app.route('/orders/<id>/receive', methods=['POST'])
 def mark_order_received(id):
     try:
         conn = get_db_connection()
@@ -1026,7 +1026,7 @@ def admin_delete_product(id):
 
     return jsonify({"message": "Product deleted successfully"}), 200
 
-@app.route('/admin/orders/<int:id>', methods=['GET'])
+@app.route('/admin/orders/<id>', methods=['GET'])
 def admin_get_order(id):
     auth_header = request.headers.get('Authorization')
     if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
@@ -1050,7 +1050,7 @@ def admin_get_order(id):
         
     return jsonify(order), 200
 
-@app.route('/admin/orders/<int:id>', methods=['PUT'])
+@app.route('/admin/orders/<id>', methods=['PUT'])
 def admin_update_order(id):
     auth_header = request.headers.get('Authorization')
     if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
@@ -1201,7 +1201,7 @@ def admin_get_customers():
 
     return jsonify(users), 200
 
-@app.route('/admin/customers/<int:id>', methods=['GET', 'PUT'])
+@app.route('/admin/customers/<id>', methods=['GET', 'PUT'])
 def admin_manage_customer(id):
     auth_header = request.headers.get('Authorization')
     if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":
@@ -1475,7 +1475,7 @@ def get_all_reviews():
     conn.close()
     return jsonify(reviews), 200
 
-@app.route('/admin/reviews/<int:id>', methods=['PUT', 'DELETE'])
+@app.route('/admin/reviews/<id>', methods=['PUT', 'DELETE'])
 def manage_review(id):
     auth_header = request.headers.get('Authorization')
     if not auth_header or auth_header != f"Bearer {ADMIN_PASSWORD}":

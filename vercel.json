@@ -1,52 +1,12 @@
 {
     "rewrites": [
         {
-            "source": "/login",
-            "destination": "/pages/login.html"
+            "source": "/api/(.*)",
+            "destination": "https://adire-store-api.onrender.com/api/$1"
         },
         {
-            "source": "/register",
-            "destination": "/pages/register.html"
-        },
-        {
-            "source": "/cart",
-            "destination": "/pages/cart.html"
-        },
-        {
-            "source": "/checkout",
-            "destination": "/pages/checkout.html"
-        },
-        {
-            "source": "/profile",
-            "destination": "/pages/profile.html"
-        },
-        {
-            "source": "/admin",
-            "destination": "/pages/admin-login.html"
-        },
-        {
-            "source": "/admin/dashboard",
-            "destination": "/pages/admin-dashboard.html"
-        },
-        {
-            "source": "/dashboard",
-            "destination": "/pages/user-dashboard.html"
-        },
-        {
-            "source": "/verify",
-            "destination": "/pages/verify.html"
-        },
-        {
-            "source": "/track",
-            "destination": "/pages/track-order.html"
-        },
-        {
-            "source": "/forgot-password",
-            "destination": "/pages/forgot-password.html"
-        },
-        {
-            "source": "/reset-password",
-            "destination": "/pages/reset-password.html"
+            "source": "/(.*)",
+            "destination": "/index.html"
         }
     ]
 }

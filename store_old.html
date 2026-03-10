@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eury Textiles - Premium Adire Boutique</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4B0082;
+            --secondary: #D4AF37;
+            --bg: #FAFAF9;
+            --text: #1C1917;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 0;
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 1px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .logo {
+            font-family: 'Playfair Display', serif;
+            font-size: 28px;
+            font-weight: 700;
+            font-style: italic;
+            color: var(--secondary);
+            text-decoration: none;
+            letter-spacing: 1px;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 80px 20px;
+            background: linear-gradient(180deg, rgba(232, 220, 196, 0.3) 0%, rgba(250, 250, 249, 1) 100%);
+        }
+
+        .hero h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            color: var(--primary);
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            color: #57534E;
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.6;
+            font-weight: 300;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 30px;
+        }
+
+        .product-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+            text-decoration: none;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(75, 0, 130, 0.1);
+        }
+
+        .product-image-container {
+            width: 100%;
+            aspect-ratio: 4/5;
+            background: #f1f1f1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .product-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s ease;
+        }
+
+        .product-card:hover .product-image {
+            transform: scale(1.05);
+        }
+
+        .product-info {
+            padding: 24px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            flex-grow: 1;
+        }
+
+        .product-name {
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+            color: #292524;
+            margin: 0 0 10px 0;
+        }
+
+        .product-price {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--primary);
+            margin: 0 0 15px 0;
+        }
+
+        .btn-buy {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            width: 100%;
+            box-sizing: border-box;
+            transition: background 0.2s;
+            margin-top: auto;
+        }
+
+        .product-card:hover .btn-buy {
+            background: #6A0DAD;
+        }
+
+        #loading {
+            text-align: center;
+            padding: 40px;
+            color: #78716C;
+            font-size: 1.1rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #78716C;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px;
+            color: #A8A29E;
+            font-size: 14px;
+            background: white;
+            margin-top: 40px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav class="navbar">
+        <a href="/" class="logo">Eury Textiles</a>
+    </nav>
+
+    <section class="hero">
+        <h1>Authentic Adire</h1>
+        <p>Premium hand-dyed fabrics and clothing crafted in the heart of Yorubaland. Browse our collection and contact
+            us directly to purchase.</p>
+    </section>
+
+    <div class="container">
+        <div id="loading">Curating luxury fabrics...</div>
+        <div id="product-list" class="product-grid"></div>
+    </div>
+
+    <footer>
+        &copy; 2024 Eury Textiles. Crafted with Tradition.
+    </footer>
+
+    <script>
+        const WHATSAPP_NUMBER = "2349076047361"; // Formatting 09076047361 for intl Whatsapp format
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const res = await fetch('products.json');
+                const products = await res.json();
+
+                const list = document.getElementById('product-list');
+                const loader = document.getElementById('loading');
+
+                loader.style.display = 'none';
+
+                if (!products || products.length === 0) {
+                    list.innerHTML = `
+                        <div class="empty-state" style="grid-column: 1/-1;">
+                            <h3 style="font-family: 'Playfair Display', serif; font-size: 24px; margin-bottom: 10px; color: #4B0082;">New Collection Arriving Soon</h3>
+                            <p>We're currently preparing fresh Adire pieces. Check back later!</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                products.reverse().forEach(p => {
+                    const message = encodeURIComponent(`Hello! I'm interested in buying: ${p.name} - ₦${p.price.toLocaleString()}`);
+                    const dmUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${message}`;
+
+                    const card = document.createElement('a');
+                    card.className = 'product-card';
+                    card.href = dmUrl;
+                    card.target = "_blank";
+                    card.rel = "noopener noreferrer";
+
+                    card.innerHTML = `
+                        <div class="product-image-container">
+                            <img src="${p.image_url}" class="product-image" alt="${p.name}" loading="lazy" onerror="this.src='https://via.placeholder.com/400x500/f1f1f1/a3a3a3?text=Adire'">
+                        </div>
+                        <div class="product-info">
+                            <div>
+                                <h3 class="product-name">${p.name}</h3>
+                                <p class="product-price">₦${p.price.toLocaleString()}</p>
+                            </div>
+                            <span class="btn-buy">Purchase via WhatsApp</span>
+                        </div>
+                    `;
+
+                    list.appendChild(card);
+                });
+            } catch (err) {
+                document.getElementById('loading').innerText = 'Error loading the collection. Please refresh.';
+                console.error('Failed to load products:', err);
+            }
+        });
+    </script>
+</body>
+
+</html>

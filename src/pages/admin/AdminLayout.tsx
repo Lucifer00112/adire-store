@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router';
-import { LayoutDashboard, Package, ShoppingCart, Users, Menu, X, LockKeyhole } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, Users, Menu, X, LockKeyhole, UserPlus } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { useState, useEffect } from 'react';
@@ -10,6 +10,7 @@ const navigation = [
   { name: 'Products', href: '/admin/products', icon: Package },
   { name: 'Orders', href: '/admin/orders', icon: ShoppingCart },
   { name: 'Customers', href: '/admin/customers', icon: Users },
+  { name: 'Administrators', href: '/admin/users', icon: UserPlus },
 ];
 
 export default function AdminLayout() {
@@ -17,34 +18,40 @@ export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');
+  const [isSignUpMode, setIsSignUpMode] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
     const savedPassword = localStorage.getItem('adminPassword');
+    const savedEmail = localStorage.getItem('adminEmail');
     if (savedPassword) {
-      verifyPassword(savedPassword);
+      verifyCredentials(savedEmail || '', savedPassword);
     }
   }, []);
 
-  const verifyPassword = async (pass: string) => {
+  const verifyCredentials = async (emailToVerify: string, pass: string) => {
     setIsVerifying(true);
     try {
       const response = await fetch('/api/admin/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-admin-email': emailToVerify,
           'x-admin-password': pass
         }
       });
 
       if (response.ok) {
         localStorage.setItem('adminPassword', pass);
+        if (emailToVerify) localStorage.setItem('adminEmail', emailToVerify);
         setIsAuthenticated(true);
         toast.success('Welcome to the Admin Vault');
       } else {
         localStorage.removeItem('adminPassword');
+        localStorage.removeItem('adminEmail');
         setIsAuthenticated(false);
-        if (password) toast.error('Incorrect password');
+        if (pass) toast.error('Incorrect credentials');
       }
     } catch (error) {
       console.error('Verification error:', error);
@@ -54,9 +61,32 @@ export default function AdminLayout() {
     }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    verifyPassword(password);
+    if (isSignUpMode) {
+      setIsVerifying(true);
+      try {
+        const response = await fetch('/api/admin/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await response.json();
+        
+        if (response.ok) {
+          toast.success('Admin account created! You can now log in.');
+          setIsSignUpMode(false);
+        } else {
+          toast.error(data.error || 'Failed to create account');
+        }
+      } catch (error) {
+        toast.error('Could not connect to server');
+      } finally {
+        setIsVerifying(false);
+      }
+    } else {
+      verifyCredentials(email, password);
+    }
   };
 
   if (!isAuthenticated) {
@@ -78,8 +108,35 @@ export default function AdminLayout() {
 
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
           <div className="bg-white py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-[#4A0080]/10">
-            <form className="space-y-6" onSubmit={handleLogin}>
+            <div className="flex gap-4 mb-6">
+              <button 
+                onClick={() => setIsSignUpMode(false)} 
+                type="button"
+                className={`flex-1 pb-2 border-b-2 font-medium text-sm transition-colors ${!isSignUpMode ? 'border-[#4A0080] text-[#4A0080]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              >
+                Sign In
+              </button>
+              <button 
+                onClick={() => setIsSignUpMode(true)} 
+                type="button"
+                className={`flex-1 pb-2 border-b-2 font-medium text-sm transition-colors ${isSignUpMode ? 'border-[#4A0080] text-[#4A0080]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              >
+                Create Account
+              </button>
+            </div>
+            <form className="space-y-6" onSubmit={handleAuth}>
               <div>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required={isSignUpMode}
+                  placeholder="Admin Email (Optional for Master)"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-[#4A0080] focus:border-[#4A0080] sm:text-sm transition-colors duration-200 mb-4"
+                />
                 <Input
                   id="password"
                   name="password"
@@ -161,7 +218,7 @@ export default function AdminLayout() {
         </nav>
 
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t space-y-2">
-          <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { localStorage.removeItem('adminPassword'); setIsAuthenticated(false); }}>
+          <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { localStorage.removeItem('adminPassword'); localStorage.removeItem('adminEmail'); setIsAuthenticated(false); }}>
             Logout
           </Button>
           <Link to="/">

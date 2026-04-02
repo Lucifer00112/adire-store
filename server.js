@@ -7,6 +7,7 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
 const dns = require('dns');
+const { Pool } = require('pg');
 
 // Force Node.js to use Google DNS to bypass local network SRV resolution issues
 dns.setServers(['8.8.8.8', '8.8.4.4']);
@@ -14,6 +15,22 @@ dns.setServers(['8.8.8.8', '8.8.4.4']);
 const app = express();
 const PORT = process.env.PORT || 3001;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+
+// --- NEON POSTGRESQL CONNECT ---
+const pgPool = new Pool({
+    connectionString: process.env.NEON_DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+});
+
+pgPool.query(`
+    CREATE TABLE IF NOT EXISTS admins (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+`).then(() => console.log('Admins table initialized in Neon DB'))
+  .catch(err => console.error('Neon DB initialization error:', err));
 
 // --- CLOUDINARY CONFIG ---
 cloudinary.config({
@@ -55,13 +72,26 @@ app.use(express.json());
 app.use(express.static(__dirname));
 
 // --- AUTH MIDDLEWARE ---
-function requireAdmin(req, res, next) {
+async function requireAdmin(req, res, next) {
     const password = req.headers['x-admin-password'] || req.query.password;
-    if (password === ADMIN_PASSWORD) {
-        next();
-    } else {
-        res.status(401).json({ error: 'Unauthorized. Invalid admin password.' });
+    const email = req.headers['x-admin-email'] || req.query.email;
+
+    if (password === ADMIN_PASSWORD && !email) {
+        return next();
     }
+
+    if (email && password) {
+        try {
+            const result = await pgPool.query('SELECT id FROM admins WHERE email = $1 AND password = $2', [email, password]);
+            if (result.rows.length > 0) {
+                return next();
+            }
+        } catch (err) {
+            console.error('Neon DB auth error:', err);
+        }
+    }
+    
+    res.status(401).json({ error: 'Unauthorized. Invalid admin credentials.' });
 }
 
 // --- PUBLIC ROUTES ---
@@ -78,9 +108,63 @@ app.get('/api/products', async (req, res) => {
 
 // --- ADMIN ROUTES ---
 
-// Verify admin password
-app.post('/api/admin/verify', requireAdmin, (req, res) => {
-    res.json({ success: true, message: 'Authenticated' });
+// Verify admin credentials
+app.post('/api/admin/verify', async (req, res) => {
+    // We check headers first (so front-ends can pass it there cleanly), or body if they post normally
+    const email = req.body.email || req.headers['x-admin-email'];
+    const password = req.body.password || req.headers['x-admin-password'];
+    
+    // Check master password
+    if (password === ADMIN_PASSWORD && !email) {
+        return res.json({ success: true, message: 'Authenticated as Master' });
+    }
+    
+    if (!email || !password) {
+        return res.status(400).json({ success: false, message: 'Email and password required' });
+    }
+    
+    // Check Neon DB
+    try {
+        const result = await pgPool.query('SELECT id FROM admins WHERE email = $1 AND password = $2', [email, password]);
+        if (result.rows.length > 0) {
+            res.json({ success: true, message: 'Authenticated', email: email });
+        } else {
+            res.status(401).json({ success: false, message: 'Invalid credentials' });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: 'Database error' });
+    }
+});
+
+// Admin Sign Up
+app.post('/api/admin/signup', async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required.' });
+    }
+    try {
+        const existing = await pgPool.query('SELECT id FROM admins WHERE email = $1', [email]);
+        if (existing.rows.length > 0) {
+            return res.status(400).json({ error: 'Admin with this email already exists.' });
+        }
+        await pgPool.query('INSERT INTO admins (email, password) VALUES ($1, $2)', [email, password]);
+        res.status(201).json({ message: 'Admin registered successfully' });
+    } catch (err) {
+        console.error('Signup error:', err);
+        res.status(500).json({ error: 'Failed to register admin in Neon DB.' });
+    }
+});
+
+// Get admin list
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+    try {
+        const result = await pgPool.query('SELECT id, email, password, created_at FROM admins ORDER BY created_at DESC');
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to fetch admin users from Neon' });
+    }
 });
 
 // Add a product (with Cloudinary image upload)

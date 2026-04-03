@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router";
 import StoreFront from "./pages/StoreFront";
+import Auth from "./pages/Auth";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminProducts from "./pages/admin/AdminProducts";
@@ -11,6 +12,10 @@ export const router = createBrowserRouter([
   {
     path: "/",
     Component: StoreFront,
+  },
+  {
+    path: "/auth",
+    Component: Auth,
   },
   {
     path: "/admin",

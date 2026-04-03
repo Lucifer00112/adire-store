@@ -32,6 +32,20 @@ pgPool.query(`
 `).then(() => console.log('Admins table initialized in Neon DB'))
   .catch(err => console.error('Neon DB initialization error:', err));
 
+pgPool.query(`
+    CREATE TABLE IF NOT EXISTS public_users (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        phone VARCHAR(255) DEFAULT '',
+        total_orders INT DEFAULT 0,
+        total_spent DECIMAL(10,2) DEFAULT 0.00,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+`).then(() => console.log('Public users table initialized in Neon DB'))
+  .catch(err => console.error('Neon DB public users init error:', err));
+
 // --- CLOUDINARY CONFIG ---
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -96,6 +110,43 @@ async function requireAdmin(req, res, next) {
 
 // --- PUBLIC ROUTES ---
 
+// Public Customer Auth
+app.post('/api/auth/signup', async (req, res) => {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) {
+        return res.status(400).json({ error: 'Name, email, and password are required.' });
+    }
+    try {
+        const existing = await pgPool.query('SELECT id FROM public_users WHERE email = $1', [email]);
+        if (existing.rows.length > 0) {
+            return res.status(400).json({ error: 'User with this email already exists.' });
+        }
+        await pgPool.query('INSERT INTO public_users (name, email, password) VALUES ($1, $2, $3)', [name, email, password]);
+        res.status(201).json({ message: 'User registered successfully', token: `fake-jwt-${email}` });
+    } catch (err) {
+        console.error('Signup error:', err);
+        res.status(500).json({ error: 'Failed to register user.' });
+    }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required.' });
+    }
+    try {
+        const result = await pgPool.query('SELECT id, name FROM public_users WHERE email = $1 AND password = $2', [email, password]);
+        if (result.rows.length > 0) {
+            res.json({ success: true, message: 'Logged in', token: `fake-jwt-${email}`, user: result.rows[0] });
+        } else {
+            res.status(401).json({ error: 'Invalid credentials' });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
 // Get all products (public)
 app.get('/api/products', async (req, res) => {
     try {
@@ -137,24 +188,7 @@ app.post('/api/admin/verify', async (req, res) => {
     }
 });
 
-// Admin Sign Up
-app.post('/api/admin/signup', async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) {
-        return res.status(400).json({ error: 'Email and password are required.' });
-    }
-    try {
-        const existing = await pgPool.query('SELECT id FROM admins WHERE email = $1', [email]);
-        if (existing.rows.length > 0) {
-            return res.status(400).json({ error: 'Admin with this email already exists.' });
-        }
-        await pgPool.query('INSERT INTO admins (email, password) VALUES ($1, $2)', [email, password]);
-        res.status(201).json({ message: 'Admin registered successfully' });
-    } catch (err) {
-        console.error('Signup error:', err);
-        res.status(500).json({ error: 'Failed to register admin in Neon DB.' });
-    }
-});
+// Admin Sign Up - Removed per request (Admins are fixed/pre-registered)
 
 // Get admin list
 app.get('/api/admin/users', requireAdmin, async (req, res) => {
@@ -164,6 +198,17 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to fetch admin users from Neon' });
+    }
+});
+
+// Get customer public users
+app.get('/api/admin/customers', requireAdmin, async (req, res) => {
+    try {
+        const result = await pgPool.query('SELECT id, name, email, phone, total_orders, total_spent, created_at FROM public_users ORDER BY created_at DESC');
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to fetch customers from Neon' });
     }
 });
 

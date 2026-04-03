@@ -2,8 +2,9 @@ import { Outlet, Link, useLocation } from 'react-router';
 import { LayoutDashboard, Package, ShoppingCart, Users, Menu, X, LockKeyhole, UserPlus } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
+import { Captcha, CaptchaHandle } from '../../components/Captcha';
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -19,7 +20,8 @@ export default function AdminLayout() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
-  const [isSignUpMode, setIsSignUpMode] = useState(false);
+  const [captchaInput, setCaptchaInput] = useState('');
+  const captchaRef = useRef<CaptchaHandle>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
@@ -63,30 +65,13 @@ export default function AdminLayout() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSignUpMode) {
-      setIsVerifying(true);
-      try {
-        const response = await fetch('/api/admin/signup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        const data = await response.json();
-        
-        if (response.ok) {
-          toast.success('Admin account created! You can now log in.');
-          setIsSignUpMode(false);
-        } else {
-          toast.error(data.error || 'Failed to create account');
-        }
-      } catch (error) {
-        toast.error('Could not connect to server');
-      } finally {
-        setIsVerifying(false);
-      }
-    } else {
-      verifyCredentials(email, password);
+    if (!captchaRef.current?.validate(captchaInput)) {
+      toast.error('Incorrect security word. Please try again.');
+      captchaRef.current?.refresh();
+      setCaptchaInput('');
+      return;
     }
+    verifyCredentials(email, password);
   };
 
   if (!isAuthenticated) {
@@ -108,21 +93,8 @@ export default function AdminLayout() {
 
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
           <div className="bg-white py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-[#4A0080]/10">
-            <div className="flex gap-4 mb-6">
-              <button 
-                onClick={() => setIsSignUpMode(false)} 
-                type="button"
-                className={`flex-1 pb-2 border-b-2 font-medium text-sm transition-colors ${!isSignUpMode ? 'border-[#4A0080] text-[#4A0080]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-              >
-                Sign In
-              </button>
-              <button 
-                onClick={() => setIsSignUpMode(true)} 
-                type="button"
-                className={`flex-1 pb-2 border-b-2 font-medium text-sm transition-colors ${isSignUpMode ? 'border-[#4A0080] text-[#4A0080]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-              >
-                Create Account
-              </button>
+            <div className="mb-6 border-b-2 border-[#4A0080] pb-2 text-center">
+              <span className="font-medium text-sm text-[#4A0080]">Master Sign In</span>
             </div>
             <form className="space-y-6" onSubmit={handleAuth}>
               <div>
@@ -131,7 +103,7 @@ export default function AdminLayout() {
                   name="email"
                   type="email"
                   autoComplete="email"
-                  required={isSignUpMode}
+                  required
                   placeholder="Admin Email (Optional for Master)"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -146,7 +118,20 @@ export default function AdminLayout() {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-[#4A0080] focus:border-[#4A0080] sm:text-sm transition-colors duration-200"
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-[#4A0080] focus:border-[#4A0080] sm:text-sm transition-colors duration-200 mb-6"
+                />
+                
+                <Captcha ref={captchaRef} />
+                
+                <Input
+                  id="captcha"
+                  name="captcha"
+                  type="text"
+                  required
+                  placeholder="Type the blurred security word above"
+                  value={captchaInput}
+                  onChange={(e) => setCaptchaInput(e.target.value)}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-[#4A0080] focus:border-[#4A0080] sm:text-sm transition-colors duration-200 mt-2"
                 />
               </div>
 

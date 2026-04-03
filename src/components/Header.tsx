@@ -1,8 +1,9 @@
-import { Search, ShoppingCart, Gift, Menu } from 'lucide-react';
+import { Search, ShoppingCart, Gift, Menu, User } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
+import { Link } from 'react-router';
 
 interface HeaderProps {
   cartItemCount: number;
@@ -47,6 +48,13 @@ export function Header({ cartItemCount, onCartClick, searchQuery, onSearchChange
           </div>
 
           <div className="flex items-center gap-4">
+            <Link to="/auth">
+              <Button variant="ghost" size="sm" className="hidden sm:flex text-muted-foreground hover:text-primary">
+                <User className="h-4 w-4 mr-2" />
+                Sign In
+              </Button>
+            </Link>
+
             <Button
               variant="outline"
               size="sm"

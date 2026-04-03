@@ -57,18 +57,18 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <Link to="/" className="flex justify-center mb-6 hover:opacity-80 transition-opacity">
           <span className="text-3xl font-serif italic font-bold text-primary">EURYTEXTILES</span>
         </Link>
-        <h2 className="mt-6 text-center text-2xl font-extrabold text-gray-900">
+        <h2 className="mt-6 text-center text-2xl font-extrabold text-foreground">
           {isSignUpMode ? 'Create your account' : 'Sign in to your account'}
         </h2>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-primary/10">
+        <div className="bg-card py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-border">
           <div className="flex gap-4 mb-6">
             <button 
               onClick={() => setIsSignUpMode(false)} 

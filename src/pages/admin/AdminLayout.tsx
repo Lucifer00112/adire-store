@@ -79,22 +79,22 @@ export default function AdminLayout() {
       <div className="min-h-screen bg-[#FDF9F1] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
           <div className="flex justify-center">
-            <div className="h-16 w-16 bg-[#4A0080]/10 rounded-full flex items-center justify-center">
-              <LockKeyhole className="h-8 w-8 text-[#4A0080]" />
+            <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center">
+              <LockKeyhole className="h-8 w-8 text-primary" />
             </div>
           </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 tracking-tight font-serif italic text-primary">
+          <h2 className="mt-6 text-center text-3xl font-extrabold tracking-tight font-serif italic text-primary">
             Admin Vault
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="mt-2 text-center text-sm text-muted-foreground">
             Welcome back. Please enter your master password to access the boutique management dashboard.
           </p>
         </div>
 
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="bg-white py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-[#4A0080]/10">
-            <div className="mb-6 border-b-2 border-[#4A0080] pb-2 text-center">
-              <span className="font-medium text-sm text-[#4A0080]">Master Sign In</span>
+          <div className="bg-card py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-border">
+            <div className="mb-6 border-b-2 border-primary pb-2 text-center">
+              <span className="font-medium text-sm text-primary">Master Sign In</span>
             </div>
             <form className="space-y-6" onSubmit={handleAuth}>
               <div>
